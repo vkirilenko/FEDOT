@@ -16,7 +16,8 @@ def get_synthetic_ts_data(n_steps=10000) -> InputData:
 
     simulated_data = simulated_data + x1 * 0.0005 - x2 * 0.0001
 
-    task = Task(TaskTypesEnum.ts_forecasting, TsForecastingParams(forecast_length=1, max_window_size=2))
+    task = Task(TaskTypesEnum.ts_forecasting, 
+                TsForecastingParams(forecast_length=1, max_window_size=2, period=None))
 
     input_data = InputData(idx=np.arange(0, n_steps),
                            features=np.asarray([x1, x2]).T,

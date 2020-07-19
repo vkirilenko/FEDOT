@@ -63,7 +63,7 @@ class DataModellingStrategy(EvaluationStrategy):
         if not hasattr(self, 'period'):
             return self._model_specific_predict
 
-        if hasattr(train_data.task.task_params, 'period'):
+        if train_data.task.task_params.period is not None:
             period = train_data.task.task_params.period
         else:
             period = _estimate_period(train_data.target)

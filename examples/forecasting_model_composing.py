@@ -70,7 +70,8 @@ def run_metocean_forecasting_problem(train_file_path, test_file_path, forecast_l
     # specify the task to solve
     task_to_solve = Task(TaskTypesEnum.ts_forecasting,
                          TsForecastingParams(forecast_length=forecast_length,
-                                             max_window_size=max_window_size))
+                                             max_window_size=max_window_size,
+                                             period=None))
 
     full_path_train = os.path.join(str(project_root()), train_file_path)
     dataset_to_train = InputData.from_csv(

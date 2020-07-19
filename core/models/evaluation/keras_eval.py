@@ -100,7 +100,7 @@ def fit_lstm(train_data: InputData, epochs: int = 1):
                   tf.keras.callbacks.ReduceLROnPlateau(
                       monitor='_rmse_only_last', factor=0.2, patience=2, min_delta=0.1, verbose=False),
                   tf.keras.callbacks.TensorBoard(update_freq=ts_length // 10)
-              ], verbose=1)
+              ], verbose=0)
 
     return model
 

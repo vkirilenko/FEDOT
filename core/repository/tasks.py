@@ -12,6 +12,7 @@ class TaskParams:
 class TsForecastingParams(TaskParams):
     forecast_length: int
     max_window_size: int
+    period: int
 
 
 class TaskTypesEnum(Enum):

@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error as mse
 
@@ -9,15 +10,16 @@ from core.models.data import InputData, OutputData
 from core.repository.dataset_types import DataTypesEnum
 from core.repository.tasks import Task, TaskTypesEnum, TsForecastingParams
 from core.utils import project_root
+from copy import deepcopy
 
 
-def get_composite_lstm_chain():
+def get_composite_chain():
     chain = Chain()
     node_trend = PrimaryNode('trend_data_model')
-    node_lstm_trend = SecondaryNode('lasso', nodes_from=[node_trend])
+    node_lstm_trend = SecondaryNode('lstm', nodes_from=[node_trend])
 
     node_residual = PrimaryNode('residual_data_model')
-    node_ridge_residual = SecondaryNode('ridge', nodes_from=[node_residual])
+    node_ridge_residual = SecondaryNode('rfr', nodes_from=[node_residual])
 
     node_final = SecondaryNode('additive_data_model',
                                nodes_from=[node_ridge_residual, node_lstm_trend])
@@ -26,12 +28,13 @@ def get_composite_lstm_chain():
 
 
 def calculate_validation_metric(pred: OutputData, valid: InputData,
-                                name: str, is_visualise=False) -> float:
+                                name: str, predict_start=0,
+                                target_start=0, is_visualise=False) -> float:
     forecast_length = valid.task.task_params.forecast_length
 
     # skip initial part of time series
-    predicted = pred.predict
-    real = valid.target[len(valid.target) - len(predicted):]
+    predicted = pred.predict[predict_start:]
+    real = valid.target[target_start:]
 
     # plot results
     if is_visualise:
@@ -56,14 +59,14 @@ def compare_plot(predicted, real, forecast_length, model_name):
     plt.title(f'Sea surface height forecast for {forecast_length} hours with {model_name}')
     plt.show()
 
-
 def run_metocean_forecasting_problem(train_file_path, test_file_path,
-                                     forecast_length=1, max_window_size=64,
-                                     is_visualise=False):
+                                     forecast_length=1, max_window_size=32,
+                                     period=12, is_visualise=False):
     # specify the task to solve
     task_to_solve = Task(TaskTypesEnum.ts_forecasting,
                          TsForecastingParams(forecast_length=forecast_length,
-                                             max_window_size=max_window_size))
+                                             max_window_size=max_window_size,
+                                             period=period))
 
     full_path_train = os.path.join(str(project_root()), train_file_path)
     dataset_to_train = InputData.from_csv(
@@ -74,37 +77,24 @@ def run_metocean_forecasting_problem(train_file_path, test_file_path,
     dataset_to_validate = InputData.from_csv(
         full_path_test, task=task_to_solve, data_type=DataTypesEnum.ts)
 
-    chain = get_composite_lstm_chain()
-
     chain_simple = Chain()
-    node_single = PrimaryNode('ridge')
-    chain_simple.add_node(node_single)
-
-    chain_lstm = Chain()
-    node_lstm = PrimaryNode('lstm')
-    chain_lstm.add_node(node_lstm)
-
-    chain.fit(input_data=dataset_to_train, verbose=False)
-    rmse_on_valid = calculate_validation_metric(
-        chain.predict(dataset_to_validate), dataset_to_validate,
-        f'full-composite_{forecast_length}',
-        is_visualise)
-
-    chain_lstm.fit(input_data=dataset_to_train, verbose=False)
-    rmse_on_valid_lstm_only = calculate_validation_metric(
-        chain_lstm.predict(dataset_to_validate), dataset_to_validate,
-        f'full-lstm-only_{forecast_length}',
-        is_visualise)
+    node_simple = PrimaryNode('lasso')
+    chain_simple.add_node(node_simple)
 
     chain_simple.fit(input_data=dataset_to_train, verbose=False)
     rmse_on_valid_simple = calculate_validation_metric(
         chain_simple.predict(dataset_to_validate), dataset_to_validate,
-        f'full-simple_{forecast_length}',
+        f'full-simple_{forecast_length}', 0, max_window_size,
         is_visualise)
-
-    print(f'RMSE composite: {rmse_on_valid}')
     print(f'RMSE simple: {rmse_on_valid_simple}')
-    print(f'RMSE LSTM only: {rmse_on_valid_lstm_only}')
+
+    chain_lstm = get_composite_chain()
+    chain_lstm.fit(input_data=dataset_to_train, verbose=False)
+    rmse_on_valid_lstm_only = calculate_validation_metric(
+        chain_lstm.predict(dataset_to_validate), dataset_to_validate,
+        f'full-lstm-only_{forecast_length}', max_window_size, max_window_size,
+        is_visualise)
+    print(f'RMSE LSTM composite: {rmse_on_valid_lstm_only}')
 
     return rmse_on_valid_simple
 

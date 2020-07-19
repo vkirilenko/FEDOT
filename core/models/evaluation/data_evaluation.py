@@ -5,6 +5,7 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 from core.models.data import InputData
 from core.models.evaluation.evaluation import EvaluationStrategy
 
+from functools import partial
 
 def get_data(predict_data: InputData):
     return predict_data.features
@@ -32,15 +33,14 @@ def _estimate_period(variable):
     return period
 
 
-def get_trend(predict_data: InputData):
+def get_trend(predict_data: InputData, period: int):
     target = predict_data.target
-    period = _estimate_period(target)
     decomposed_target = seasonal_decompose(target, period=period, extrapolate_trend='freq')
     return decomposed_target.trend
 
 
-def get_residual(predict_data: InputData):
-    target_trend = get_trend(predict_data)
+def get_residual(predict_data: InputData, period: int):
+    target_trend = get_trend(predict_data, period)
     target_residual = predict_data.target - target_trend
     return target_residual
 
@@ -56,13 +56,21 @@ class DataModellingStrategy(EvaluationStrategy):
 
     def __init__(self, model_type: str):
         self._model_specific_predict = self._model_functions_by_type[model_type]
+        if model_type in ['trend_data_model', 'residual_data_model']:
+            self.period = None
 
     def fit(self, train_data: InputData):
-        # fit is not necessary for data models
-        return None
+        if not hasattr(self, 'period'):
+            return self._model_specific_predict
+
+        if hasattr(train_data.task.task_params, 'period'):
+            period = train_data.task.task_params.period
+        else:
+            period = _estimate_period(train_data.target)
+        return partial(self._model_specific_predict, period=period)
 
     def predict(self, trained_model, predict_data: InputData):
-        return self._model_specific_predict(predict_data)
+        return trained_model(predict_data)
 
     def fit_tuned(self, train_data: InputData, iterations: int = 30):
         return None, None

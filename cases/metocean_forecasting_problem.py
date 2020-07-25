@@ -43,7 +43,16 @@ def calculate_validation_metric(pred: OutputData, valid: InputData,
                      model_name=name)
 
     # the quality assessment for the simulation results
-    rmse = mse(y_true=real, y_pred=predicted, squared=False)
+    slices = []
+    for i in range(forecast_length):
+        if i + 1 == forecast_length:
+            slices.append(real[i:])
+        else:
+            slices.append(real[i : i+1-forecast_length])
+
+    rmse = mse(y_true=np.column_stack(slices),
+               y_pred=predicted,
+               squared=False)
 
     return rmse
 
@@ -72,6 +81,11 @@ def run_metocean_forecasting_problem(train_file_path, test_file_path,
     dataset_to_train = InputData.from_csv(
         full_path_train, task=task_to_solve, data_type=DataTypesEnum.ts)
 
+    # n = 100
+    # dataset_to_train.features = dataset_to_train.features[:n]
+    # dataset_to_train.target = dataset_to_train.target[:n]
+    # dataset_to_train.idx = dataset_to_train.idx[:n]
+
     # a dataset for a final validation of the composed model
     full_path_test = os.path.join(str(project_root()), test_file_path)
     dataset_to_validate = InputData.from_csv(
@@ -84,7 +98,9 @@ def run_metocean_forecasting_problem(train_file_path, test_file_path,
     chain_simple.fit(input_data=dataset_to_train, verbose=False)
     rmse_on_valid_simple = calculate_validation_metric(
         chain_simple.predict(dataset_to_validate), dataset_to_validate,
-        f'full-simple_{forecast_length}', 0, max_window_size,
+        f'full-simple_{forecast_length}', 
+        0,
+        max_window_size,
         is_visualise)
     print(f'RMSE simple: {rmse_on_valid_simple}')
 
@@ -92,7 +108,9 @@ def run_metocean_forecasting_problem(train_file_path, test_file_path,
     chain_lstm.fit(input_data=dataset_to_train, verbose=False)
     rmse_on_valid_lstm_only = calculate_validation_metric(
         chain_lstm.predict(dataset_to_validate), dataset_to_validate,
-        f'full-lstm-only_{forecast_length}', max_window_size, max_window_size,
+        f'full-lstm-only_{forecast_length}', 
+        max_window_size, 
+        max_window_size-forecast_length+1,
         is_visualise)
     print(f'RMSE LSTM composite: {rmse_on_valid_lstm_only}')
 
@@ -111,4 +129,4 @@ if __name__ == '__main__':
     full_path_test = os.path.join(str(project_root()), file_path_test)
 
     run_metocean_forecasting_problem(full_path_train, full_path_test,
-                                     forecast_length=1, is_visualise=True)
+                                     forecast_length=2, is_visualise=True)

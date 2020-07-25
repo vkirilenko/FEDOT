@@ -40,7 +40,8 @@ def get_synthetic_ts_data(n_steps=10000) -> InputData:
                            data_type=DataTypesEnum.ts,
                            task=Task(task_type=TaskTypesEnum.ts_forecasting,
                                      task_params=TsForecastingParams(forecast_length=1,
-                                                                     max_window_size=16)))
+                                                                     max_window_size=16,
+                                                                     period=None)))
     return input_data
 
 

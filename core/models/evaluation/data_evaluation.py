@@ -19,9 +19,13 @@ def get_difference(predict_data: InputData):
 
 
 def get_sum(predict_data: InputData):
-    if predict_data.features.shape[1] != 2:
+    if predict_data.features.shape[-1   ] % 2 != 0:
         raise ValueError('Wrong number of inputs for the additive model')
-    return np.sum(predict_data.features, axis=1)
+    sh = predict_data.features.shape[-1] // 2
+    s = np.zeros((*predict_data.features.shape[:-1], sh))
+    for i in range(2):
+        s += predict_data.features[..., i*sh : (i+1)*sh]
+    return s
 
 
 def _estimate_period(variable):

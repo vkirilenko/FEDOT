@@ -111,12 +111,12 @@ def _combine_datasets_ts(outputs: List[OutputData]):
             if isinstance(elem.predict, list):
                 predict = np.zeros(expected_len - len(elem.predict)) + elem.predict
             else:
-                predict = np.concatenate((np.zeros(expected_len - len(elem.predict)),
-                                          elem.predict))
+                zeros = np.zeros((expected_len - len(predict), *predict.shape[1:]))
+                predict = np.concatenate((zeros, predict))
 
         features.append(predict)
 
-    features = np.array(features).T
+    features = np.column_stack(features)
 
     return features
 

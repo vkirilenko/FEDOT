@@ -110,4 +110,4 @@ def predict_lstm(trained_model, predict_data: InputData) -> OutputData:
 
     pred = trained_model.predict(predict_data.features)
     # pred = np.r_[np.zeros(window_len + prediction_len - 1), pred[:, -forecast_length, 0]]
-    return pred[:, -1, 0]
+    return pred[:, -forecast_length:, 0]

@@ -8,8 +8,8 @@ from sklearn.model_selection import train_test_split
 
 from fedot.core.algorithms.time_series.lagged_features import prepare_lagged_ts_for_prediction
 from fedot.core.models.preprocessing import ImputationStrategy
-from fedot.core.repository.dataset_types import DataTypesEnum
-from fedot.core.repository.tasks import Task, TaskTypesEnum
+from fedot.core.repository.dataset_types import DataTypesEnum, get_data_type
+from fedot.core.repository.tasks import Task, TaskTypesEnum, get_task_type
 
 
 @dataclass
@@ -28,7 +28,8 @@ class Data:
                  task: Task = Task(TaskTypesEnum.classification),
                  data_type: DataTypesEnum = DataTypesEnum.table,
                  columns_to_drop: Optional[List] = None,
-                 target_column: Optional[str] = ''):
+                 target_column: Optional[str] = '',
+                 header: bool = False):
         """
         :param file_path: the path to the CSV with data
         :param columns_to_drop: the names of columns that should be dropped
@@ -36,10 +37,18 @@ class Data:
         :param task: the task that should be solved with data
         :param data_type: the type of data interpretation
         :param target_column: name of target column (last column if empty and no target if None)
+        :param header: header should contain one row with two columns (TaskTypesEnum: str, DataTypesEnum: str)
         :return:
         """
 
-        data_frame = pd.read_csv(file_path, sep=delimiter)
+        if header:
+            task_, data_type_ = pd.read_csv(file_path, nrows=0).columns[0].split()
+            data_frame = pd.read_csv(file_path, sep=delimiter, header=1)
+            task = Task(get_task_type(task_))
+            data_type = get_data_type(data_type_)
+        else:
+            data_frame = pd.read_csv(file_path, sep=delimiter)
+
         if columns_to_drop:
             data_frame = data_frame.drop(columns_to_drop, axis=1)
         data_frame = _convert_dtypes(data_frame=data_frame)
@@ -117,6 +126,31 @@ class InputData(Data):
             pass
 
         return prepared_data
+
+    def to_csv(self, path_to_save, columns: List[str] = None, header: bool = False, verbose: bool = False):
+        indexes = self.idx
+        features = self.features
+
+        _validate_column_name(columns, len(features[0]))
+
+        dataframe = pd.DataFrame(data=features, index=indexes, columns=columns)
+
+        if self.target is not None:
+            dataframe['target'] = self.target
+
+        if header:
+            task_type = self.task.task_type.name
+            data_type = self.data_type.name
+            template = """{} {} \n{}""".format(task_type, data_type, dataframe.to_csv())
+            with open(path_to_save, 'w') as f:
+                f.write(template)
+        else:
+            dataframe.to_csv(path_to_save)
+
+        if verbose:
+            print(f'DataFrame was saved to csv: {path_to_save}', end='\n')
+            print('-' * 20, end='\n')
+            print(dataframe.head())
 
 
 @dataclass
@@ -216,3 +250,12 @@ def _combine_datasets_common(outputs: List[OutputData]):
             for i in range(number_of_variables_in_prediction):
                 features.append(elem.predict[:, i])
     return features
+
+
+def _validate_column_name(columns: List[str], valid_number_columns: int):
+    if columns is not None:
+        if all([column for column in columns if isinstance(column, str)]):
+            if len(columns) != valid_number_columns:
+                raise IndexError(f"Length of input columns must be: '{valid_number_columns}'.")
+        else:
+            raise ValueError(f'Columns type must be str')

@@ -40,7 +40,7 @@ def export_project_to_zip(chain: Chain, data: InputData, zip_name: str,
         log.info(f'The project was saved on the path: {absolute_folder_path}')
 
 
-def import_project_from_zip(zip_path: str) -> [Chain, InputData]:
+def import_project_from_zip(zip_path: str, verbose: bool = False) -> [Chain, InputData]:
     """
     Unzipping zip file. Zip file should contains:
     - chain.json: json performance,
@@ -49,6 +49,7 @@ def import_project_from_zip(zip_path: str) -> [Chain, InputData]:
     Created Chain and InputData objects. Ready to work with it.
 
     :param zip_path: path to zip archive
+    :param verbose: flag to write logs
     :return [Chain, InputData]: return array of Chain object and InputData.
     """
     log = default_log('fedot.utilities.project_import_export')
@@ -61,8 +62,9 @@ def import_project_from_zip(zip_path: str) -> [Chain, InputData]:
 
     shutil.unpack_archive(zip_path, folder_path)
 
-    message = f"The project '{zip_name}' was unpacked to the '{folder_path}'."
-    log.info(message)
+    if verbose:
+        message = f"The project '{zip_name}' was unpacked to the '{folder_path}'."
+        log.info(message)
 
     for root, dirs, files in os.walk(folder_path):
         for file in files:
@@ -74,11 +76,13 @@ def import_project_from_zip(zip_path: str) -> [Chain, InputData]:
 
     if data is None:
         message = "No CSV data in the project folder."
-        log.error(message)
+        if verbose:
+            log.error(message)
         raise ValueError(message)
     if chain is None:
         message = "No JSON chain in the project folder."
-        log.error(message)
+        if verbose:
+            log.error(message)
         raise ValueError(message)
 
     return [chain, data]

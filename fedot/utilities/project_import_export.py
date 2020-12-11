@@ -48,7 +48,7 @@ def import_project_from_zip(zip_path: str, verbose: bool = False) -> [Chain, Inp
     """
     Unzipping zip file. Zip file should contains:
     - chain.json: json performance,
-    - train_data.csv: csv with first line which contains task_type and data_type of train InputData object.
+    - train_data.csv: csv with first line which contains task_type and data_type of train InputData object,
     - test_data.csv: csv with first line which contains task_type and data_type of test InputData object.
 
     Created Chain and InputData objects. Ready to work with it.
@@ -92,6 +92,7 @@ def _check_for_exist_file_raise(file: InputData or None or Chain, file_name: str
         if verbose:
             log.error(message)
         raise ValueError(message)
+
 
 def _get_zip_name(zip_path: str) -> str:
     zip_path_split = os.path.split(zip_path)

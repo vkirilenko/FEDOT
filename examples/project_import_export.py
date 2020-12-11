@@ -46,5 +46,3 @@ if __name__ == '__main__':
     prediction = chain.predict(test_data)
 
     print(roc_auc(test_data.target, prediction.predict))
-
-

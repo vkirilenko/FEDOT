@@ -13,6 +13,8 @@ DEFAULT_PROJECTS_PATH = os.path.join(DEFAULT_PATH, 'projects')
 
 def export_project_to_zip(chain: Chain, data: InputData, zip_name: str,
                           log_file_name: str = None, verbose: bool = False):
+    # TODO add functionality for compress more files that user wants
+    # TODO add functionality for compress fitted models
     """
     Convert chain to JSON, data to csv, compress them to zip
     archive and save to 'DEFAULT_PROJECTS_PATH/projects' with logs.
@@ -70,9 +72,9 @@ def import_project_from_zip(zip_path: str, verbose: bool = False) -> [Chain, Inp
         for file in files:
             if file.endswith('json'):
                 chain = Chain()
-                chain.load_chain(os.path.join(root ,file))
+                chain.load_chain(os.path.join(root, file))
             if file.endswith('csv'):
-                data = InputData.from_csv(os.path.join(root ,file), header=True)
+                data = InputData.from_csv(os.path.join(root, file), header=True)
 
     if data is None:
         message = "No CSV data in the project folder."

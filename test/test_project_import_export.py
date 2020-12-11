@@ -1,13 +1,9 @@
-import numpy as np
 import pytest
 import os
 import shutil
 import zipfile
 
-from sklearn.datasets import load_iris
-
-from fedot.core.repository.dataset_types import DataTypesEnum
-from fedot.core.repository.tasks import Task, TaskTypesEnum
+from cases.data.data_utils import get_scoring_case_data_paths
 from fedot.core.models.data import InputData
 from fedot.core.utils import default_fedot_data_dir
 from fedot.utilities.project_import_export import export_project_to_zip, import_project_from_zip
@@ -31,18 +27,6 @@ def delete_files_folders():
             shutil.rmtree(absolute_path)
 
 
-def data_setup():
-    predictors, response = load_iris(return_X_y=True)
-    np.random.shuffle(predictors)
-    np.random.shuffle(response)
-    predictors = predictors[:100]
-    response = response[:100]
-    data = InputData(features=predictors, target=response, idx=np.arange(0, 100),
-                     task=Task(TaskTypesEnum.classification),
-                     data_type=DataTypesEnum.table)
-    return data
-
-
 def test_export_project_correctly():
     folder_name = 'iris_classification'
     zip_name = folder_name + '.zip'
@@ -52,14 +36,16 @@ def test_export_project_correctly():
     PATHS_TO_DELETE_AFTER_TEST.append(zip_name)
 
     chain = create_chain()
-    data = data_setup()
-    export_project_to_zip(chain, data, folder_name, log_file_name=name_of_log, verbose=True)
+    train_file_path, test_file_path = get_scoring_case_data_paths()
+    train_data = InputData.from_csv(train_file_path)
+    test_data = InputData.from_csv(test_file_path)
+    export_project_to_zip(chain, train_data, test_data, folder_name, log_file_name=name_of_log, verbose=True)
 
     assert os.path.exists(path_to_zip)
 
     with zipfile.ZipFile(path_to_zip) as zip_object:
         assert sorted([file.filename for file in zip_object.infolist()]) == sorted(
-            ['log.log', 'data.csv', 'chain.json'])
+            ['log.log', 'train_data.csv', 'chain.json', 'test_data.csv'])
 
 
 def test_import_project_correctly():
@@ -73,4 +59,5 @@ def test_import_project_correctly():
     import_project_from_zip(zip_path)
 
     assert os.path.exists(folder_path)
-    assert sorted([file for file in os.listdir(folder_path)]) == sorted(['log.log', 'data.csv', 'chain.json'])
+    assert sorted([file for file in os.listdir(folder_path)]) == sorted(
+        ['log.log', 'train_data.csv', 'chain.json', 'test_data.csv'])

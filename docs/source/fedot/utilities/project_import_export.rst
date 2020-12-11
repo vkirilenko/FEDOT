@@ -12,7 +12,18 @@ the composer returns the best generated chain.
 
 .. code-block:: python
 
-    data = setup_data()
+    from cases.data.data_utils import get_scoring_case_data_paths
+    from fedot.core.models.data import InputData
+    from fedot.core.composer.gp_composer.fixed_structure_composer import FixedStructureComposerBuilder
+    from fedot.core.composer.gp_composer.gp_composer import GPComposerRequirements
+    from fedot.core.repository.quality_metrics_repository import ClassificationMetricsEnum, MetricsRepository
+    from fedot.core.repository.tasks import Task, TaskTypesEnum
+    from test.chain.test_chain_tuning import get_class_chain
+
+    train_file_path, test_file_path = get_scoring_case_data_paths()
+    train_data = InputData.from_csv(train_file_path)
+    test_data = InputData.from_csv(test_file_path)
+
     available_model_types = ['logit', 'lda', 'knn']
 
     metric_function = MetricsRepository().metric_by_id(ClassificationMetricsEnum.ROCAUC)
@@ -27,7 +38,7 @@ the composer returns the best generated chain.
         reference_chain).with_metrics(metric_function).with_requirements(req)
     composer = builder.build()
 
-    chain = composer.compose_chain(data=dataset_to_compose)
+    chain = composer.compose_chain(data=train_data)
 
 To share a project or continue working with this thread on another computer, you can
 use the function: **'export_project_to_zip'**:
@@ -36,11 +47,14 @@ use the function: **'export_project_to_zip'**:
 
     from fedot.utilities.project_import_export import export_project_to_zip
 
-    # export_project_to_zip(chain: Chain, data: InputData, zip_name: str, log_file_name: str = None, verbose: bool = False):
-    export_project_to_zip(chain, data, 'project_name.zip', 'project_name_log.log', verbose=True)
+    # export_project_to_zip(chain: Chain, train_data: InputData, test_data: InputData,
+    #                       zip_name: str, log_file_name: str = None, verbose: bool = False):
 
+    export_project_to_zip(chain, train_data, test_data,
+                          'project_name.zip', 'project_name_log.log', verbose=True)
 
-And in the directory will be created zipfile: ``home/user/Fedot/projects/zip_name.zip``.
+Chain will be converted to JSON format, InputData objects to CSV format. And all folder
+will be compressed to zipfile: ``home/user/Fedot/projects/zip_name.zip``.
 
 Import project
 -----------------------
@@ -49,10 +63,18 @@ that the framework is ready to work with, you need to call the function **'impor
 
 .. code-block:: python
 
-    from fedot.utilities.project_import_export import export_project_to_zip
+    from sklearn.metrics import roc_auc_score as roc_auc
+    from fedot.utilities.project_import_export import import_project_from_zip
 
-    # import_project_from_zip(zip_path: str, verbose: bool = False) -> [Chain, InputData]:
-    import_project_from_zip('/home/user/downloads/project_name.zip', verbose=True)
+    # import_project_from_zip(zip_path: str, verbose: bool = False) -> [Chain, InputData, InputData]:
+    chain, train_data, test_data = import_project_from_zip('/home/user/downloads/project_name.zip', verbose=True)
+
+    chain.fit(train_data)
+    prediction = chain.predict(test_data)
+
+    print(roc_auc(test_data.target, prediction.predict))
+
+
 
 The function returns a ready-made *Python Object Chain* and *InputData* and create unarchived folder in
 default path: ``/home/user/Fedot/projects/project_name`` with unarchived files.

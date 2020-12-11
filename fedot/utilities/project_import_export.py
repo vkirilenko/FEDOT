@@ -11,7 +11,7 @@ DEFAULT_PATH = default_fedot_data_dir()
 DEFAULT_PROJECTS_PATH = os.path.join(DEFAULT_PATH, 'projects')
 
 
-def export_project_to_zip(chain: Chain, data: InputData, zip_name: str,
+def export_project_to_zip(chain: Chain, train_data: InputData, test_data: InputData, zip_name: str,
                           log_file_name: str = None, verbose: bool = False):
     # TODO add functionality for compress more files that user wants
     # TODO add functionality for compress fitted models
@@ -20,7 +20,8 @@ def export_project_to_zip(chain: Chain, data: InputData, zip_name: str,
     archive and save to 'DEFAULT_PROJECTS_PATH/projects' with logs.
 
     :param chain: Chain object to export
-    :param data: InputData object to export
+    :param train_data: train InputData object to export
+    :param test_data: test InputData object to export
     :param zip_name: name of the zip file
     :param log_file_name: name of the file with log to export
     :param verbose: flag to write logs
@@ -32,7 +33,8 @@ def export_project_to_zip(chain: Chain, data: InputData, zip_name: str,
 
     # Converts python objects to files for compression
     chain.save_chain(os.path.join(absolute_folder_path, 'chain.json'))
-    data.to_csv(os.path.join(absolute_folder_path, 'data.csv'), header=True)
+    train_data.to_csv(os.path.join(absolute_folder_path, 'train_data.csv'), header=True)
+    test_data.to_csv(os.path.join(absolute_folder_path, 'test_data.csv'), header=True)
     _copy_log_file(log_file_name, absolute_folder_path, log, verbose)
 
     shutil.make_archive(absolute_folder_path, 'zip', absolute_folder_path)
@@ -42,21 +44,21 @@ def export_project_to_zip(chain: Chain, data: InputData, zip_name: str,
         log.info(f'The project was saved on the path: {absolute_folder_path}')
 
 
-def import_project_from_zip(zip_path: str, verbose: bool = False) -> [Chain, InputData]:
+def import_project_from_zip(zip_path: str, verbose: bool = False) -> [Chain, InputData, InputData]:
     """
     Unzipping zip file. Zip file should contains:
     - chain.json: json performance,
-    - data.csv: csv with first line which contains task_type and data_type of InputData object.
+    - train_data.csv: csv with first line which contains task_type and data_type of train InputData object.
+    - test_data.csv: csv with first line which contains task_type and data_type of test InputData object.
 
     Created Chain and InputData objects. Ready to work with it.
 
     :param zip_path: path to zip archive
     :param verbose: flag to write logs
-    :return [Chain, InputData]: return array of Chain object and InputData.
+    :return [Chain, InputData, InputData]: return array of Chain and InputData objects.
     """
     log = default_log('fedot.utilities.project_import_export')
-    chain = None
-    data = None
+    train_data, test_data, chain = [None, None, None]
 
     _check_zip_path(zip_path, log)
     zip_name = _get_zip_name(zip_path)
@@ -73,22 +75,23 @@ def import_project_from_zip(zip_path: str, verbose: bool = False) -> [Chain, Inp
             if file.endswith('json'):
                 chain = Chain()
                 chain.load_chain(os.path.join(root, file))
-            if file.endswith('csv'):
-                data = InputData.from_csv(os.path.join(root, file), header=True)
+            if file == 'train_data.csv':
+                train_data = InputData.from_csv(os.path.join(root, file), header=True)
+            if file == 'test_data.csv':
+                test_data = InputData.from_csv(os.path.join(root, file), header=True)
 
-    if data is None:
-        message = "No CSV data in the project folder."
+    for file, file_name in [[train_data, 'train data'], [test_data, 'test data'], [chain, 'JSON chain']]:
+        _check_for_exist_file_raise(file, file_name, verbose, log)
+
+    return [chain, train_data, test_data]
+
+
+def _check_for_exist_file_raise(file: InputData or None or Chain, file_name: str, verbose: bool, log: 'Log'):
+    if file is None:
+        message = f"No {file_name} in the project folder."
         if verbose:
             log.error(message)
         raise ValueError(message)
-    if chain is None:
-        message = "No JSON chain in the project folder."
-        if verbose:
-            log.error(message)
-        raise ValueError(message)
-
-    return [chain, data]
-
 
 def _get_zip_name(zip_path: str) -> str:
     zip_path_split = os.path.split(zip_path)

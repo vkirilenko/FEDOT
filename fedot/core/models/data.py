@@ -141,7 +141,7 @@ class InputData(Data):
         if header:
             task_type = self.task.task_type.name
             data_type = self.data_type.name
-            template = """{} {} \n{}""".format(task_type, data_type, dataframe.to_csv())
+            template = f"{task_type} {data_type} \n{dataframe.to_csv()}"
             with open(path_to_save, 'w') as f:
                 f.write(template)
         else:
@@ -254,8 +254,12 @@ def _combine_datasets_common(outputs: List[OutputData]):
 
 def _validate_column_name(columns: List[str], valid_number_columns: int):
     if columns is not None:
-        if all([column for column in columns if isinstance(column, str)]):
+        if _array_contains_only_one_type(columns, 'str'):
             if len(columns) != valid_number_columns:
                 raise IndexError(f"Length of input columns must be: '{valid_number_columns}'.")
         else:
-            raise ValueError(f'Columns type must be str')
+            raise ValueError(f'Columns type must be str.')
+
+
+def _array_contains_only_one_type(array, t):
+    return all([column for column in array if isinstance(column, t)])

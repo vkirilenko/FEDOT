@@ -164,11 +164,11 @@ class InputData(Data):
         self.features, self.target = shuffle(self.features, self.target, random_state=random_state)
 
     def __post_init__(self):
-        # suppress unnecessary dimension in target
-        if self.target is not None and self.data_type != DataTypesEnum.ts_lagged_table and \
-                len(self.target.shape) > 1 and self.target.shape[1] == 1:
-            self.target = np.squeeze(self.target, axis=1)
-
+        if self.target is not None:
+            # suppress unnecessary dimension in target
+            if self.data_type != DataTypesEnum.ts_lagged_table and \
+                    len(self.target.shape) > 1 and self.target.shape[1] == 1:
+                self.target = np.squeeze(self.target, axis=1)
 
 @dataclass
 class OutputData(Data):

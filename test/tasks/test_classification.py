@@ -50,6 +50,19 @@ def get_binary_classification_data():
     return input_data
 
 
+def get_pre_separated_classification_data_with_categorical_features():
+    test_file_path = str(os.path.dirname(__file__))
+    file = '../data/classification_with_categorical.csv'
+    input_data = InputData.from_csv(
+        os.path.join(test_file_path, file))
+
+    file = '../data/classification_with_categorical_new.csv'
+    input_data_test = InputData.from_csv(
+        os.path.join(test_file_path, file), target_column=None)
+
+    return input_data, input_data_test
+
+
 def test_multiclassification_chain_fit_correct():
     data = get_iris_data()
     chain = chain_simple()
@@ -90,6 +103,16 @@ def test_classification_with_pca_chain_fit_correct():
                                   average='macro')
 
     assert roc_auc_on_test_pca > roc_auc_on_test > 0.5
+
+
+def test_classification_with_categorical_correct():
+    train_data, test_data = get_pre_separated_classification_data_with_categorical_features()
+    chain = chain_simple()
+
+    chain.fit(input_data=train_data)
+    results = chain.predict(input_data=test_data)
+
+    assert len(results.predict) == len(test_data.idx)
 
 
 def test_output_mode_labels():

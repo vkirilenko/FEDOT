@@ -7,7 +7,6 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
 
 from fedot.core.algorithms.time_series.lagged_features import prepare_lagged_ts_for_prediction
 from fedot.core.data.preprocessing import ImputationStrategy
@@ -159,9 +158,6 @@ class InputData(Data):
             pass
 
         return prepared_data
-
-    def shuffle(self, random_state=0):
-        self.features, self.target = shuffle(self.features, self.target, random_state=random_state)
 
     def __post_init__(self):
         if self.target is not None:

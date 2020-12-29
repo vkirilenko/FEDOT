@@ -197,11 +197,11 @@
 	},
 	"multinb": {
 	  "meta": "sklearn_class",
-	  "tags": ["bayesian, non-default"]
+	  "tags": ["bayesian", "non-default"]
 	},
     "tfidf": {
       "meta": "text_classification",
-      "tags": ["text, non-default"]
+	  "tags": ["text", "non-default"]
     }
   }
 }

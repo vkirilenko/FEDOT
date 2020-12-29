@@ -65,9 +65,14 @@ def test_classification_quality_metric(data_setup):
     metric_value_with_penalty = \
         metric_function_with_penalty(chain=chain, reference_data=train)
 
+    metric_function_balanced = \
+        MetricsRepository().metric_by_id(ClassificationMetricsEnum.balanced_accuracy)
+    metric_value_balanced = metric_function_balanced(chain=chain, reference_data=train)
+
     assert 0.5 < abs(metric_value) < 1.0
     assert 0.5 < abs(metric_value_with_penalty) < 1.0
     assert metric_value < metric_value_with_penalty
+    assert metric_value_balanced < -0.5
 
 
 def test_regression_quality_metric(data_setup):

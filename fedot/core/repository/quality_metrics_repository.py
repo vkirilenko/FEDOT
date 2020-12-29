@@ -1,7 +1,7 @@
 from typing import Callable
 
-from fedot.core.composer.metrics import F1Metric, MaeMetric, RmseMetric, \
-    RocAucMetric, StructuralComplexityMetric
+from fedot.core.composer.metrics import BalancedAccuracyMetric, F1Metric, MaeMetric, RmseMetric, RocAucMetric, \
+    StructuralComplexityMetric
 from fedot.core.utils import ComparableEnum as Enum
 
 
@@ -23,6 +23,7 @@ class ClassificationMetricsEnum(QualityMetricsEnum):
     ROCAUC_penalty = 'roc_auc_pen'
     precision = 'precision'
     f1 = 'f1'
+    balanced_accuracy = 'balanced_accuracy'
 
 
 class RegressionMetricsEnum(QualityMetricsEnum):
@@ -39,6 +40,7 @@ class MetricsRepository:
         RegressionMetricsEnum.RMSE: RmseMetric.get_value,
         RegressionMetricsEnum.RMSE_penalty: RmseMetric.get_value_with_penalty,
         ClassificationMetricsEnum.f1: F1Metric.get_value,
+        ClassificationMetricsEnum.balanced_accuracy: BalancedAccuracyMetric.get_value,
         ComplexityMetricsEnum.structural: StructuralComplexityMetric.get_value
     }
 

@@ -3,7 +3,7 @@ from abc import abstractmethod
 from copy import copy
 
 import numpy as np
-from sklearn.metrics import f1_score, mean_squared_error, roc_auc_score
+from sklearn.metrics import balanced_accuracy_score, f1_score, mean_squared_error, roc_auc_score
 
 from fedot.core.chains.chain import Chain
 from fedot.core.data.data import InputData, OutputData
@@ -27,12 +27,16 @@ class Metric:
 class QualityMetric:
     max_penalty_part = 0.01
     default_value = None
+    use_labels = False
 
     @classmethod
     def get_value(cls, chain: Chain, reference_data: InputData) -> float:
         metric = cls.default_value
         try:
-            results = chain.predict(reference_data)
+            if cls.use_labels and reference_data.task.task_type == TaskTypesEnum.classification:
+                results = chain.predict(reference_data, output_mode='labels')
+            else:
+                results = chain.predict(reference_data)
 
             if reference_data.task.task_type == TaskTypesEnum.ts_forecasting:
                 new_reference_data = copy(reference_data)
@@ -72,13 +76,22 @@ class RmseMetric(QualityMetric):
 
 class F1Metric(QualityMetric):
     default_value = 0
+    use_labels = True
 
     @staticmethod
     @from_maximised_metric
     def metric(reference: InputData, predicted: OutputData) -> float:
-        bound = np.mean(predicted.predict)
-        predicted_labels = [1 if x >= bound else 0 for x in predicted.predict]
-        return f1_score(y_true=reference.target, y_pred=predicted_labels)
+        return f1_score(y_true=reference.target, y_pred=predicted)
+
+
+class BalancedAccuracyMetric(QualityMetric):
+    default_value = 0
+    use_labels = True
+
+    @staticmethod
+    @from_maximised_metric
+    def metric(reference: InputData, predicted: OutputData) -> float:
+        return balanced_accuracy_score(y_true=reference.target, y_pred=predicted.predict)
 
 
 class MaeMetric(QualityMetric):

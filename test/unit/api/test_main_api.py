@@ -169,6 +169,31 @@ def test_pandas_input_for_api():
     assert baseline_metrics['f1'] > 0
 
 
+def test_repetative_pandas_input_for_api():
+    train_data_path, test_data_path = get_split_data_paths()
+    train_data = pd.read_csv(train_data_path)
+    test_data = pd.read_csv(test_data_path)
+
+    # task selection, initialisation of the framework
+    baseline_model = Fedot(problem='regression')
+
+    # fit model without optimisation - single XGBreg node is used
+    baseline_model.fit(features=train_data, target='target', predefined_model='xgbreg')
+
+    # fit model with optimisation
+    model = Fedot(problem='classification', learning_time=0.1)
+    model.fit(features=train_data, target='target')
+
+    # fit model with optimisation again
+    model = Fedot(problem='classification', learning_time=0.1)
+    model.fit(features=train_data, target='target')
+
+    # evaluate the prediction with test data
+    prediction = baseline_model.predict(features=test_data)
+
+    assert prediction is not None
+
+
 def test_multiobj_for_api():
     train_data, test_data, _ = get_dataset('classification')
     composer_params['composer_metric'] = ['f1', 'node_num']

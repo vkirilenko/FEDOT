@@ -13,11 +13,12 @@ from fedot.core.chains.node import PrimaryNode, SecondaryNode
 from fedot.core.composer.composer import ComposerRequirements
 from fedot.core.composer.gp_composer.fixed_structure_composer import FixedStructureComposerBuilder
 from fedot.core.composer.gp_composer.gp_composer import GPComposerBuilder, GPComposerRequirements, \
-    sample_split_ration_for_tasks
+    sample_split_ratio_for_tasks
 from fedot.core.composer.optimisers.gp_comp.gp_optimiser import GPChainOptimiserParameters, GeneticSchemeTypesEnum
 from fedot.core.composer.optimisers.gp_comp.operators.selection import SelectionTypesEnum
 from fedot.core.composer.random_composer import RandomSearchComposer
-from fedot.core.data.data import InputData, train_test_data_setup
+from fedot.core.data.data import InputData
+from fedot.core.data.data_split import train_test_data_setup
 from fedot.core.repository.operation_types_repository import OperationTypesRepository
 from fedot.core.repository.quality_metrics_repository import ClassificationMetricsEnum, ComplexityMetricsEnum, \
     MetricsRepository
@@ -186,8 +187,8 @@ def test_composition_time(data_fixture, request):
 
     _ = gp_composer_completed_evolution.compose_chain(data=data)
 
-    assert len(gp_composer_terminated_evolution.history.chains) == 1
-    assert len(gp_composer_completed_evolution.history.chains) == 2
+    assert len(gp_composer_terminated_evolution.history.individuals) == 1
+    assert len(gp_composer_completed_evolution.history.individuals) == 2
 
 
 @pytest.mark.parametrize('data_fixture', ['file_data_setup'])
@@ -216,9 +217,9 @@ def test_parameter_free_composer_build_chain_correct(data_fixture, request):
 
     roc_on_valid_gp_composed = roc_auc(y_true=dataset_to_validate.target,
                                        y_score=predicted_gp_composed.predict)
-    population_len = sum([len(history) for history in gp_composer.history.chains]) / len(
-        gp_composer.history.chains)
-    assert population_len != len(gp_composer.history.chains[0])
+    population_len = sum([len(history) for history in gp_composer.history.individuals]) / len(
+        gp_composer.history.individuals)
+    assert population_len != len(gp_composer.history.individuals[0])
     assert roc_on_valid_gp_composed > 0.6
 
 
@@ -278,7 +279,7 @@ def test_gp_composer_with_start_depth(data_fixture, request):
     composer = builder.build()
     composer.compose_chain(data=dataset_to_compose,
                            is_visualise=True)
-    assert all([ind.depth <= 3 for ind in composer.history.chains[0]])
+    assert all([ind.chain.depth <= 3 for ind in composer.history.individuals[0]])
     assert composer.optimiser.max_depth == 5
 
 
@@ -299,7 +300,7 @@ def test_gp_composer_saving_info_from_process(data_fixture, request):
         quality_metric).with_optimiser_parameters(optimiser_parameters).with_cache()
     composer = builder.build()
     train_data, test_data = train_test_data_setup(data,
-                                                  sample_split_ration_for_tasks[data.task.task_type])
+                                                  sample_split_ratio_for_tasks[data.task.task_type])
     composer.compose_chain(data=dataset_to_compose, is_visualise=True)
     with shelve.open(composer.cache.db_path) as cache:
         global_cache_len_before = len(cache.dict)

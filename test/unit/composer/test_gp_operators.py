@@ -8,19 +8,20 @@ from fedot.core.chains.chain import Chain
 from fedot.core.chains.node import PrimaryNode, SecondaryNode
 from fedot.core.composer.constraint import constraint_function
 from fedot.core.composer.gp_composer.gp_composer import ChainGenerationParams, GPComposerBuilder, \
-    GPComposerRequirements, sample_split_ration_for_tasks
-from fedot.core.composer.optimisers.gp_comp.gp_operators import evaluate_individuals, filter_duplicates, \
-    nodes_from_height
+    GPComposerRequirements, sample_split_ratio_for_tasks
+from fedot.core.composer.optimisers.gp_comp.gp_operators import evaluate_individuals, filter_duplicates
+from fedot.core.composer.optimisers.gp_comp.individual import Individual
 from fedot.core.composer.optimisers.gp_comp.operators.crossover import CrossoverTypesEnum, crossover
 from fedot.core.composer.optimisers.gp_comp.operators.mutation import MutationTypesEnum, mutation
 from fedot.core.composer.optimisers.utils.multi_objective_fitness import MultiObjFitness
 from fedot.core.composer.timer import CompositionTimer
-from fedot.core.data.data import InputData, train_test_data_setup
+from fedot.core.data.data import InputData
+from fedot.core.data.data_split import train_test_data_setup
 from fedot.core.log import default_log
 from fedot.core.repository.operation_types_repository import OperationTypesRepository
 from fedot.core.repository.quality_metrics_repository import ClassificationMetricsEnum
 from fedot.core.repository.tasks import Task, TaskTypesEnum
-from fedot.core.utils import project_root
+from fedot.core.utils import fedot_project_root
 from test.unit.chains.test_node_cache import chain_fifth, chain_first, chain_fourth, chain_second, chain_third
 
 
@@ -50,16 +51,16 @@ def chain_example():
 
 def test_nodes_from_height():
     chain = chain_example()
-    found_nodes = nodes_from_height(chain, 1)
+    found_nodes = chain.operator.nodes_from_layer(1)
     true_nodes = [node for node in chain.root_node.nodes_from]
     assert all([node_model == found_node for node_model, found_node in
                 zip(true_nodes, found_nodes)])
 
 
 def test_evaluate_individuals():
-    project_root_path = str(project_root())
+    project_root_path = str(fedot_project_root())
     file_path_train = os.path.join(project_root_path, 'test/data/simple_classification.csv')
-    full_path_train = os.path.join(str(project_root()), file_path_train)
+    full_path_train = os.path.join(str(fedot_project_root()), file_path_train)
 
     task = Task(TaskTypesEnum.classification)
     dataset_to_compose = InputData.from_csv(full_path_train, task=task)
@@ -75,9 +76,9 @@ def test_evaluate_individuals():
     composer = builder.build()
 
     train_data, test_data = train_test_data_setup(dataset_to_compose,
-                                                  sample_split_ration_for_tasks[dataset_to_compose.task.task_type])
+                                                  sample_split_ratio_for_tasks[dataset_to_compose.task.task_type])
     metric_function_for_nodes = partial(composer.composer_metric, composer.metrics, train_data, test_data)
-    population = [chain_first(), chain_second(), chain_third(), chain_fourth()]
+    population = [Individual(c) for c in [chain_first(), chain_second(), chain_third(), chain_fourth()]]
     max_lead_time = datetime.timedelta(minutes=0.001)
     with CompositionTimer(max_lead_time=max_lead_time) as t:
         evaluate_individuals(individuals_set=population, objective_function=metric_function_for_nodes,
@@ -85,7 +86,7 @@ def test_evaluate_individuals():
     assert len(population) == 1
     assert population[0].fitness is not None
 
-    population = [chain_first(), chain_second(), chain_third(), chain_fourth()]
+    population = [Individual(c) for c in [chain_first(), chain_second(), chain_third(), chain_fourth()]]
     max_lead_time = datetime.timedelta(minutes=5)
     with CompositionTimer(max_lead_time=max_lead_time) as t:
         evaluate_individuals(individuals_set=population, objective_function=metric_function_for_nodes,
@@ -97,7 +98,7 @@ def test_evaluate_individuals():
 def test_filter_duplicates():
     archive = tools.ParetoFront()
     archive_items = [chain_first(), chain_second(), chain_third()]
-    population = [chain_first(), chain_second(), chain_third(), chain_fourth()]
+    population = [Individual(c) for c in [chain_first(), chain_second(), chain_third(), chain_fourth()]]
     archive_items_fitness = ((-0.80001, 0.25), (-0.7, 0.1), (-0.9, 0.7))
     population_fitness = ((-0.8, 0.25), (-0.59, 0.25), (-0.9, 0.7), (-0.7, 0.1))
     weights = tuple([-1 for _ in range(len(population_fitness[0]))])

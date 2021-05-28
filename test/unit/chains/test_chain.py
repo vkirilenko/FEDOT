@@ -2,7 +2,7 @@ import datetime
 import os
 import platform
 import time
-from copy import deepcopy
+from copy import copy, deepcopy
 from multiprocessing import set_start_method
 from random import seed
 
@@ -14,12 +14,14 @@ from sklearn.metrics import roc_auc_score as roc
 
 from fedot.core.chains.chain import Chain
 from fedot.core.chains.node import PrimaryNode, SecondaryNode
-from fedot.core.data.data import InputData, train_test_data_setup
+from fedot.core.data.data import InputData
+from fedot.core.data.data_split import train_test_data_setup
 from fedot.core.repository.dataset_types import DataTypesEnum
 from fedot.core.repository.tasks import Task, TaskTypesEnum, TsForecastingParams
 from fedot.core.utils import probs_to_labels
 from test.unit.chains.test_chain_comparison import chain_first
 from test.unit.chains.test_chain_tuning import classification_dataset
+from test.unit.chains.test_graph_operator import get_chain
 
 seed(1)
 np.random.seed(1)
@@ -314,7 +316,7 @@ def test_delete_node_with_redirection():
     assert first in chain.root_node.nodes_from
 
 
-def test_delete_primary_node_with_redirection():
+def test_delete_primary_node():
     # given
     first = PrimaryNode(operation_type='logit')
     second = PrimaryNode(operation_type='lda')
@@ -334,31 +336,31 @@ def test_delete_primary_node_with_redirection():
     assert isinstance(new_primary_node, PrimaryNode)
 
 
-def test_delete_secondary_node_with_multiple_children_and_redirection():
+def test_update_subtree():
     # given
-    logit_first = PrimaryNode(operation_type='logit')
-    lda_first = PrimaryNode(operation_type='lda')
-    knn_center = SecondaryNode(operation_type='knn', nodes_from=[logit_first, lda_first])
-    logit_second = SecondaryNode(operation_type='logit', nodes_from=[knn_center])
-    lda_second = SecondaryNode(operation_type='lda', nodes_from=[knn_center])
-    final = SecondaryNode(operation_type='xgboost',
-                          nodes_from=[logit_second, lda_second])
-
-    chain = Chain()
-    chain.add_node(final)
+    chain = get_chain()
+    subroot_parent = PrimaryNode('xgboost')
+    subroot = SecondaryNode('xgboost', nodes_from=[subroot_parent])
+    node_to_replace = chain.nodes[2]
 
     # when
-    chain.delete_node(knn_center)
+    chain.update_subtree(node_to_replace, subroot)
 
     # then
-    updated_logit_second_parents = chain.nodes[1].nodes_from
-    updated_lda_second_parents = chain.nodes[4].nodes_from
+    assert chain.nodes[2].operation.operation_type == 'xgboost'
+    assert chain.nodes[3].operation.operation_type == 'xgboost'
 
-    assert len(chain.nodes) == 5
-    assert updated_logit_second_parents[0] is logit_first
-    assert updated_logit_second_parents[1] is lda_first
-    assert updated_lda_second_parents[0] is logit_first
-    assert updated_lda_second_parents[1] is lda_first
+
+def test_delete_subtree():
+    # given
+    chain = get_chain()
+    subroot = chain.nodes[2]
+
+    # when
+    chain.delete_subtree(subroot)
+
+    # then
+    assert chain.length == 3
 
 
 @pytest.mark.parametrize('data_fixture', ['classification_dataset'])
@@ -416,3 +418,15 @@ def test_chain_fine_tune_all_nodes_correct(classification_dataset):
     is_tuning_finished = True
 
     assert is_tuning_finished
+
+
+def test_chain_copy(data_setup):
+    chain = Chain(PrimaryNode(operation_type='logit'))
+    chain_copy = copy(chain)
+    assert chain.uid != chain_copy.uid
+
+
+def test_chain_deepcopy(data_setup):
+    chain = Chain(PrimaryNode(operation_type='logit'))
+    chain_copy = deepcopy(chain)
+    assert chain.uid != chain_copy.uid

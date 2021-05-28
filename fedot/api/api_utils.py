@@ -1,24 +1,22 @@
 import datetime
-from typing import Callable, Union
+from typing import Callable, Union, Optional
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import (accuracy_score, f1_score, log_loss, mean_squared_error,
-                             r2_score, roc_auc_score, mean_absolute_error)
+from sklearn.metrics import (accuracy_score, f1_score, log_loss, mean_absolute_error, mean_squared_error, r2_score,
+                             roc_auc_score)
 
 from fedot.core.chains.chain import Chain
 from fedot.core.chains.node import PrimaryNode, SecondaryNode
-from fedot.core.composer.gp_composer.gp_composer import (GPComposerBuilder,
-                                                         GPComposerRequirements,
-                                                         GPChainOptimiserParameters)
+from fedot.core.composer.gp_composer.gp_composer import (GPChainOptimiserParameters, GPComposerBuilder,
+                                                         GPComposerRequirements)
 from fedot.core.composer.optimisers.gp_comp.gp_optimiser import GeneticSchemeTypesEnum
 from fedot.core.composer.optimisers.gp_comp.operators.crossover import CrossoverTypesEnum
 from fedot.core.composer.optimisers.gp_comp.operators.mutation import MutationTypesEnum
 from fedot.core.data.data import InputData, OutputData
 from fedot.core.log import Log
 from fedot.core.repository.dataset_types import DataTypesEnum
-from fedot.core.repository.operation_types_repository import get_operations_for_task
-from fedot.core.repository.operation_types_repository import get_ts_operations
+from fedot.core.repository.operation_types_repository import get_operations_for_task, get_ts_operations
 from fedot.core.repository.quality_metrics_repository import (ClassificationMetricsEnum, ClusteringMetricsEnum,
                                                               ComplexityMetricsEnum, MetricsRepository,
                                                               RegressionMetricsEnum)
@@ -110,8 +108,8 @@ def filter_operations_by_preset(task, preset: str):
     """ Function filter operations by preset, remove "heavy" operations and save
     appropriate ones
     """
-    excluded_models_dict = {'light': ['mlp', 'svc', 'arima', 'exog', 'text_clean'],
-                            'light_tun': ['mlp', 'svc', 'arima', 'exog', 'text_clean']}
+    excluded_models_dict = {'light': ['mlp', 'svc', 'arima', 'exog_ts_data_source', 'text_clean'],
+                            'light_tun': ['mlp', 'svc', 'arima', 'exog_ts_data_source', 'text_clean']}
 
     # Get data operations and models
     available_operations = get_operations_for_task(task, mode='all')
@@ -142,7 +140,8 @@ def compose_fedot_model(train_data: InputData,
                         composer_metric=None,
                         learning_time: float = 5,
                         with_tuning=False,
-                        tuner_metric=None
+                        tuner_metric=None,
+                        cv_folds: Optional[int] = None
                         ):
     """ Function for composing FEDOT chain model """
 
@@ -167,7 +166,8 @@ def compose_fedot_model(train_data: InputData,
                                pop_size=pop_size,
                                num_of_generations=num_of_generations,
                                max_lead_time=datetime.timedelta(minutes=learning_time_for_composing),
-                               allow_single_operations=False)
+                               allow_single_operations=False,
+                               cv_folds=cv_folds)
 
     optimizer_parameters = GPChainOptimiserParameters(genetic_scheme_type=GeneticSchemeTypesEnum.parameter_free,
                                                       mutation_types=[MutationTypesEnum.parameter_change,
@@ -225,7 +225,9 @@ def compose_fedot_model(train_data: InputData,
 
     logger.message('Model composition finished')
 
-    return chain_for_return, best_candidates
+    history = gp_composer.optimiser.history
+
+    return chain_for_return, best_candidates, history
 
 
 def _obtain_initial_assumption(task: Task) -> Chain:
@@ -273,7 +275,7 @@ def _divide_operations(available_operations, task):
         ts_data_operations = get_ts_operations(mode='data_operations',
                                                tags=["ts_specific"])
         # Remove exog data operation from the list
-        ts_data_operations.remove('exog')
+        ts_data_operations.remove('exog_ts_data_source')
 
         primary_operations = ts_data_operations
         secondary_operations = available_operations

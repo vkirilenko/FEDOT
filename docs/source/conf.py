@@ -22,7 +22,7 @@ copyright = '2020-2021, NSS Lab'
 author = 'NSS Lab'
 
 # The full version, including alpha/beta/rc tags
-release = '0.3.0'
+release = '0.3.1'
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -36,12 +36,8 @@ extensions = [
 ]
 autodoc_typehints = 'description'
 
-autodoc_mock_imports = ['numpy', 'numpy.random',
-                        'sklearn', 'matplotlib',
-                        'h2o', 'tpot', 'scipy',
-                        'statsmodels', 'tensorflow',
-                        'pandas', 'skopt', 'networkx',
-                        'hyperopt', 'scikit-optimize']
+
+autodoc_mock_imports = ['objgraph', 'memory_profiler', 'gprof2dot', 'snakeviz']
 
 autodoc_member_order = 'bysource'
 

@@ -4,8 +4,9 @@ from sklearn.datasets import load_iris
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report
 
-from fedot.core.chains.node import PrimaryNode
-from fedot.core.data.data import InputData, train_test_data_setup
+from fedot.core.chains.node import PrimaryNode, SecondaryNode
+from fedot.core.data.data import InputData
+from fedot.core.data.data_split import train_test_data_setup
 from fedot.core.operations.model import Model
 from fedot.core.repository.dataset_types import DataTypesEnum
 from fedot.core.repository.tasks import Task, TaskTypesEnum
@@ -82,3 +83,25 @@ def test_node_repr():
 
     # then
     assert actual_node_description == expected_node_description
+
+
+def test_ordered_subnodes_hierarchy():
+    first_node = PrimaryNode('knn')
+    second_node = PrimaryNode('knn')
+    third_node = SecondaryNode('lda', nodes_from=[first_node, second_node])
+    root = SecondaryNode('logit', nodes_from=[third_node])
+
+    ordered_nodes = root.ordered_subnodes_hierarchy()
+
+    assert len(ordered_nodes) == 4
+
+
+def test_distance_to_primary_level():
+    first_node = PrimaryNode('knn')
+    second_node = PrimaryNode('knn')
+    third_node = SecondaryNode('lda', nodes_from=[first_node, second_node])
+    root = SecondaryNode('logit', nodes_from=[third_node])
+
+    distance = root.distance_to_primary_level
+
+    assert distance == 2

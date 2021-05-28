@@ -5,9 +5,8 @@ import numpy as np
 import pandas as pd
 from deap import tools
 
-from fedot.api.api_utils import (array_to_input_data, compose_fedot_model,
-                                 filter_operations_by_preset, composer_metrics_mapping,
-                                 save_predict)
+from fedot.api.api_utils import (array_to_input_data, compose_fedot_model, composer_metrics_mapping,
+                                 filter_operations_by_preset, save_predict)
 from fedot.core.chains.chain import Chain
 from fedot.core.chains.node import PrimaryNode
 from fedot.core.composer.optimisers.utils.pareto import ParetoFront
@@ -16,8 +15,7 @@ from fedot.core.data.visualisation import plot_forecast
 from fedot.core.log import default_log
 from fedot.core.repository.dataset_types import DataTypesEnum
 from fedot.core.repository.quality_metrics_repository import MetricsRepository
-from fedot.core.repository.tasks import Task, TaskParams, TaskTypesEnum
-from fedot.core.repository.tasks import TsForecastingParams
+from fedot.core.repository.tasks import Task, TaskParams, TaskTypesEnum, TsForecastingParams
 
 NOT_FITTED_ERR_MSG = 'Model not fitted yet'
 
@@ -62,6 +60,7 @@ class Fedot:
             'learning_time':- composing time (minutes)
             'available_operations' - list of model names to use
             'with_tuning' - allow huperparameters tuning for the model
+            'cv_folds' - number of folds for cross-validation
     :param task_params:  additional parameters of the task
     :param seed: value for fixed random seed
     :param verbose_level: level of the output detailing
@@ -90,6 +89,9 @@ class Fedot:
 
         # best models for multi-objective case
         self.best_models = None
+
+        # composer history
+        self.history = None
 
         # datasets
         self.train_data = None
@@ -151,7 +153,7 @@ class Fedot:
     def _obtain_model(self, is_composing_required: bool = True):
         execution_params = self._get_params()
         if is_composing_required:
-            self.current_model, self.best_models = compose_fedot_model(**execution_params)
+            self.current_model, self.best_models, self.history = compose_fedot_model(**execution_params)
 
         if isinstance(self.best_models, tools.ParetoFront):
             self.best_models.__class__ = ParetoFront

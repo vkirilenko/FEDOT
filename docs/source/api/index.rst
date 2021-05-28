@@ -9,7 +9,7 @@ API
    composer
    chain
    node
-   model
+   operation
    eval_strategy
    tuning
    repository
@@ -17,3 +17,4 @@ API
    logging
    sensitivity
    synthetic_dataset_generator
+   profiler

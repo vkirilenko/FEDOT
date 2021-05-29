@@ -2,6 +2,7 @@ import json
 import os
 from collections import Counter
 from datetime import datetime
+from io import BytesIO
 from typing import List, Union
 from uuid import uuid4
 
@@ -131,7 +132,7 @@ class ChainTemplate:
 
         return path_to_save
 
-    def import_chain(self, source: Union[str, dict]):
+    def import_chain(self, source: Union[str, dict], dict_fitted_operations: dict = None):
         json_object_chain = None
         path = None
 
@@ -147,7 +148,7 @@ class ChainTemplate:
             self.log.message(f'The chain was imported from dict.')
 
         self._extract_operations(json_object_chain, path)
-        self.convert_to_chain(self.link_to_empty_chain, path)
+        self.convert_to_chain(self.link_to_empty_chain, path, dict_fitted_operations)
         self.depth = self.link_to_empty_chain.depth
 
     def _check_path_correct(self, path: str):
@@ -176,18 +177,18 @@ class ChainTemplate:
             self.operation_templates.append(operation_template)
             self.total_chain_operations[operation_template.operation_type] += 1
 
-    def convert_to_chain(self, chain, path: str = None):
+    def convert_to_chain(self, chain, path: str = None, dict_fitted_operations: dict = None):
         if path is not None:
             path = os.path.abspath(os.path.dirname(path))
         visited_nodes = {}
         root_template = [op_template for op_template in self.operation_templates if op_template.operation_id == 0][0]
-        root_node = self.roll_chain_structure(root_template, visited_nodes, path)
+        root_node = self.roll_chain_structure(root_template, visited_nodes, path, dict_fitted_operations)
         chain.nodes.clear()
         chain.add_node(root_node)
 
     def roll_chain_structure(self, operation_object: ['OperationTemplate',
                                                       'AtomizedModelTemplate'],
-                             visited_nodes: dict, path: str = None):
+                             visited_nodes: dict, path: str = None, dict_fitted_operations: dict = None):
         """
         The function recursively traverses all disjoint operations
         and connects the operations in a chain.
@@ -197,6 +198,7 @@ class ChainTemplate:
         :params path: path to save
         :return: root_node
         """
+        fitted_operation = None
         if operation_object.operation_id in visited_nodes:
             return visited_nodes[operation_object.operation_id]
 
@@ -222,12 +224,18 @@ class ChainTemplate:
                 raise FileNotFoundError(message)
 
             fitted_operation = joblib.load(path_to_operation)
-            operation_object.fitted_operation = fitted_operation
-            node.fitted_operation = fitted_operation
+        elif dict_fitted_operations is not None:
+            bytes_container = BytesIO()
+            bytes_container.write(dict_fitted_operations[operation_object.fitted_operation_path])
+            fitted_operation = joblib.load(bytes_container)
+
+        operation_object.fitted_operation = fitted_operation
+        node.fitted_operation = fitted_operation
 
         nodes_from = [operation_template for operation_template in self.operation_templates
                       if operation_template.operation_id in operation_object.nodes_from]
-        node.nodes_from = [self.roll_chain_structure(node_from, visited_nodes, path) for node_from
+        node.nodes_from = [self.roll_chain_structure(node_from, visited_nodes, path, dict_fitted_operations) for
+                           node_from
                            in nodes_from]
 
         visited_nodes[operation_object.operation_id] = node

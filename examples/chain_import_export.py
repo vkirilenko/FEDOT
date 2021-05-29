@@ -80,10 +80,22 @@ def run_import_export_example(chain_path):
     print(f'After import {prediction_after_export[:4]}')
 
     # Import chain from dict
-    with open("received_data.json") as f:
+    with open(json_path_load) as f:
         dict_chain = json.load(f)
+
+    dict_fitted_operations = {}
+    created_dir = json_path_load.split('/')[0]
+    for op in dict_chain['nodes']:
+        with open(os.path.join(created_dir, op['fitted_operation_path']), 'rb') as f:
+            op_pickle = f.read()
+            dict_fitted_operations[op['fitted_operation_path']] = op_pickle
+
     chain_from_dict = Chain()
-    chain_from_dict.load(dict_chain)
+    chain_from_dict.load(dict_chain, dict_fitted_operations)
+
+    predicted_output = chain_from_dict.predict(predict_input)
+    prediction = np.array(predicted_output.predict)
+    print(f'Prediction from chain loaded from dict {prediction[:4]}')
 
 
 if __name__ == '__main__':

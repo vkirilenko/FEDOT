@@ -301,7 +301,7 @@ class Chain:
         json_object = self.template.export_chain(path)
         return json_object
 
-    def load(self, path: str):
+    def load(self, source: Union[str, dict]):
         """
         Load the chain the json representation with pickled fitted operations.
 
@@ -309,7 +309,7 @@ class Chain:
         """
         self.nodes = []
         self.template = ChainTemplate(self, self.log)
-        self.template.import_chain(path)
+        self.template.import_chain(source)
 
     def show(self, path: str = None):
         ChainVisualiser().visualise(self, path)

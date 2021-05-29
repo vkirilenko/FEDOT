@@ -1,3 +1,4 @@
+import json
 import os
 import numpy as np
 
@@ -66,7 +67,7 @@ def run_import_export_example(chain_path):
     print(f'Before export {prediction_before_export[:4]}')
 
     # Export it
-    chain.save(path=chain_path)
+    dumped_json = chain.save(path=chain_path)
 
     # Import chain
     json_path_load = create_correct_path(chain_path)
@@ -77,6 +78,12 @@ def run_import_export_example(chain_path):
     prediction_after_export = np.array(predicted_output_after_export.predict)
 
     print(f'After import {prediction_after_export[:4]}')
+
+    # Import chain from dict
+    with open("received_data.json") as f:
+        dict_chain = json.load(f)
+    chain_from_dict = Chain()
+    chain_from_dict.load(dict_chain)
 
 
 if __name__ == '__main__':

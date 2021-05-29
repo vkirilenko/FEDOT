@@ -2,7 +2,7 @@ import json
 import os
 from collections import Counter
 from datetime import datetime
-from typing import List
+from typing import List, Union
 from uuid import uuid4
 
 import joblib
@@ -131,12 +131,20 @@ class ChainTemplate:
 
         return path_to_save
 
-    def import_chain(self, path: str):
-        self._check_path_correct(path)
+    def import_chain(self, source: Union[str, dict]):
+        json_object_chain = None
+        path = None
 
-        with open(path) as json_file:
-            json_object_chain = json.load(json_file)
-            self.log.message(f"The chain was imported from the path: {path}.")
+        if type(source) is str:
+            path = source
+            self._check_path_correct(path)
+
+            with open(path) as json_file:
+                json_object_chain = json.load(json_file)
+                self.log.message(f'The chain was imported from the path: {path}.')
+        else:
+            json_object_chain = source
+            self.log.message(f'The chain was imported from dict.')
 
         self._extract_operations(json_object_chain, path)
         self.convert_to_chain(self.link_to_empty_chain, path)

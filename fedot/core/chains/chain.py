@@ -289,7 +289,7 @@ class Chain:
             else:
                 node.fitted_operation = None
 
-    def save(self, path: str):
+    def save(self, path: str = None):
         """
         Save the chain to the json representation with pickled fitted operations.
 

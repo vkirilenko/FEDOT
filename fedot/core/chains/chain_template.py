@@ -73,21 +73,24 @@ class ChainTemplate:
 
         return operation_template
 
-    def export_chain(self, path: str):
+    def export_chain(self, path: str = None):
         """
         Save JSON to path and return this JSON like object.
         :param path: custom path to save
         :return: JSON like object
         """
 
+        chain_template_dict = self.convert_to_dict()
+        json_data = json.dumps(chain_template_dict)
+
+        if path is None:
+            return json_data
+
         path = self._prepare_paths(path)
         absolute_path = os.path.abspath(path)
 
         if not os.path.exists(absolute_path):
             os.makedirs(absolute_path)
-
-        chain_template_dict = self.convert_to_dict()
-        json_data = json.dumps(chain_template_dict)
 
         with open(os.path.join(absolute_path, f'{self.unique_chain_id}.json'), 'w', encoding='utf-8') as f:
             f.write(json.dumps(json.loads(json_data), indent=4))

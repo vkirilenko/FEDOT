@@ -229,15 +229,27 @@ def convert_params(params):
     return new_params
 
 
-def get_new_operation_params(operation_name):
+def apply_lagged_mutation(current_params):
+    """ Method transform lagged operation 'window_size' parameter """
+
+    return current_params
+
+
+def get_new_operation_params(operation_name, current_params):
     """ Function return a dictionary with new
 
     :param operation_name: name of operation to get hyperparameters for
+    :param current_params: dictionary with custom hyperparameters
     """
 
     # Function to imitate objective
     def fake_objective(fake_params):
         return 0
+
+    # Specific mutation for lagged operation
+    if operation_name == 'lagged':
+        params_dict = apply_lagged_mutation(current_params)
+        return params_dict
 
     # Get available parameters for operation
     params_list = get_operation_parameter_range(operation_name)

@@ -128,4 +128,4 @@ def duplicates_filtration(archive, population):
 
 def clean_operators_history(population):
     for chain in population:
-        chain.parent_operator = []
+        chain.parent_operators = []

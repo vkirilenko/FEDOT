@@ -33,9 +33,9 @@ def selection(types: List[SelectionTypesEnum], population: List[Individual], pop
     if selection_type in selection_by_type.keys():
         selected = selection_by_type[selection_type](population, pop_size)
         for selected_ind in selected:
-            selected_ind.parent_operator = ParentOperator(operator_type='selection',
+            selected_ind.parent_operators = [ParentOperator(operator_type='selection',
                                                           operator_name=str(selection_type),
-                                                          parent_chains=[ChainTemplate(selected_ind.chain)])
+                                                          parent_chains=[ChainTemplate(selected_ind.chain)])]
         return selected
     else:
         raise ValueError(f'Required selection not found: {selection_type}')

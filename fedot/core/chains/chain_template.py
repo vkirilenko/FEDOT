@@ -73,14 +73,14 @@ class ChainTemplate:
 
         return operation_template
 
-    def export_chain(self, path: str = None):
+    def export_chain(self, path: str = None, root_node: Node = None):
         """
         Save JSON to path and return this JSON like object.
         :param path: custom path to save
         :return: JSON like object
         """
 
-        chain_template_dict = self.convert_to_dict()
+        chain_template_dict = self.convert_to_dict(root_node)
         json_data = json.dumps(chain_template_dict)
 
         if path is None:
@@ -101,14 +101,15 @@ class ChainTemplate:
 
         return json_data
 
-    def convert_to_dict(self) -> dict:
+    def convert_to_dict(self, root_node: Node = None) -> dict:
         json_nodes = list(map(lambda op_template: op_template.convert_to_dict(), self.operation_templates))
-
         json_object = {
             "total_chain_operations": self.total_chain_operations,
             "depth": self.depth,
             "nodes": json_nodes,
         }
+        if root_node:
+            json_object['descriptive_id'] = root_node.descriptive_id
 
         return json_object
 

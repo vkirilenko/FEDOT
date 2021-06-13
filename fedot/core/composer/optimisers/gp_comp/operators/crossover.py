@@ -40,13 +40,13 @@ def crossover(types: List[CrossoverTypesEnum],
                                                                    deepcopy(ind_second.chain), max_depth)
                     are_correct = all([constraint_function(new_chain) for new_chain in new_chains])
                     if are_correct:
+                        operator = ParentOperator(operator_type='crossover',
+                                                  operator_name=str(crossover_type),
+                                                  parent_chains=[ChainTemplate(ind_first.chain),
+                                                                 ChainTemplate(ind_second.chain)])
                         for chain in new_chains:
                             new_ind = Individual(chain)
-                            new_ind.parent_operators.append(
-                                ParentOperator(operator_type='crossover',
-                                               operator_name=str(crossover_type),
-                                               parent_chains=[ChainTemplate(ind_first.chain),
-                                                              ChainTemplate(ind_second.chain)]))
+                            new_ind.parent_operators.append(operator)
                             new_inds.append(new_ind)
                         return new_inds
             else:

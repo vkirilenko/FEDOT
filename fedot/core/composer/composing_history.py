@@ -10,13 +10,14 @@ from fedot.core.composer.optimisers.utils.multi_objective_fitness import MultiOb
 from fedot.core.composer.optimisers.utils.population_utils import get_metric_position
 from fedot.core.repository.quality_metrics_repository import QualityMetricsEnum
 from fedot.core.utils import default_fedot_data_dir
-
+from uuid import uuid4
 
 @dataclass
 class ParentOperator:
     operator_name: str
     operator_type: str
     parent_chains: List[ChainTemplate]
+    uid: str = uuid4()
 
 
 class ComposingHistory:

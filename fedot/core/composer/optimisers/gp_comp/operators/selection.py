@@ -1,7 +1,7 @@
 import math
 from random import choice, randint
 from typing import (Any, List)
-
+from copy import copy
 from deap import tools
 
 from fedot.core.chains.chain_template import ChainTemplate
@@ -30,13 +30,15 @@ def selection(types: List[SelectionTypesEnum], population: List[Individual], pop
     }
 
     selection_type = choice(types)
-    operator = ParentOperator(operator_type='selection',
-                              operator_name=str(selection_type),
-                              parent_chains=[ChainTemplate(ind.chain) for ind in population])
     if selection_type in selection_by_type.keys():
         selected = selection_by_type[selection_type](population, pop_size)
+        operator = ParentOperator(operator_type='selection',
+                                  operator_name=str(selection_type),
+                                  parent_chains=[])
         for selected_ind in selected:
-            selected_ind.parent_operators = [operator]
+            operator = copy(operator)
+            operator.parent_chains = [ChainTemplate(selected_ind.chain)]
+            selected_ind.parent_operators.append(operator)
         return selected
     else:
         raise ValueError(f'Required selection not found: {selection_type}')

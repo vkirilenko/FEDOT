@@ -28,6 +28,7 @@ class ChainTemplate:
         self.depth = chain.depth
         self.operation_templates = []
         self.unique_chain_id = str(uuid4()) if not chain.uid else chain.uid
+        self.struct_id = chain.root_node.descriptive_id
         self.computation_time = chain.computation_time
 
         if not log:

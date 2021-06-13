@@ -17,7 +17,11 @@ class ParentOperator:
     operator_name: str
     operator_type: str
     parent_chains: List[ChainTemplate]
-    uid: str = uuid4()
+    uid: str = None
+
+    def __post_init__(self):
+        if not self.uid:
+            self.uid = str(uuid4())
 
 
 class ComposingHistory:

@@ -169,7 +169,7 @@ def compose_fedot_model(train_data: InputData,
                                allow_single_operations=False,
                                cv_folds=cv_folds)
 
-    optimizer_parameters = GPChainOptimiserParameters(genetic_scheme_type=GeneticSchemeTypesEnum.parameter_free,
+    optimizer_parameters = GPChainOptimiserParameters(genetic_scheme_type=GeneticSchemeTypesEnum.steady_state,
                                                       mutation_types=[MutationTypesEnum.parameter_change,
                                                                       MutationTypesEnum.simple,
                                                                       MutationTypesEnum.reduce,

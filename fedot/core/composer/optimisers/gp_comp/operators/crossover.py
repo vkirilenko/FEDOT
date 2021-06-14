@@ -46,6 +46,8 @@ def crossover(types: List[CrossoverTypesEnum],
                                                                  ChainTemplate(ind_second.chain)])
                         for chain in new_chains:
                             new_ind = Individual(chain)
+                            new_ind.parent_operators = [ind_first.parent_operators,
+                                                        ind_second.parent_operators]
                             new_ind.parent_operators.append(operator)
                             new_inds.append(new_ind)
                         return new_inds

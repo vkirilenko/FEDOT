@@ -25,6 +25,15 @@ MAX_NUM_OF_GENERATED_INDS = 10000
 MIN_POPULATION_SIZE_WITH_ELITISM = 2
 
 
+class SimpleArchive(list):
+    def update(self, x):
+        self.extend((x))
+
+    @property
+    def items(self):
+        return list(self)
+
+
 class GPChainOptimiserParameters:
     """
         This class is for defining the parameters of optimiser
@@ -100,7 +109,7 @@ class GPChainOptimiser:
         self.secondary_node_func = self.chain_generation_params.secondary_node_func
         self.chain_class = self.chain_generation_params.chain_class
         self.requirements = requirements
-        self.archive = archive_type
+        self.archive = archive_type if archive_type else SimpleArchive()
         self.parameters = GPChainOptimiserParameters() if parameters is None else parameters
         self.max_depth = self.requirements.start_depth \
             if self.parameters.with_auto_depth_configuration and self.requirements.start_depth \
@@ -212,6 +221,9 @@ class GPChainOptimiser:
                 self.log_info_about_best()
 
                 self.generation_num += 1
+
+                if isinstance(self.archive, SimpleArchive):
+                    self.archive.clear()
 
                 clean_operators_history(self.population)
             best = self.result_individual()

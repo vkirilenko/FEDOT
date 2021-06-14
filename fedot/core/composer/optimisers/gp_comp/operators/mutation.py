@@ -68,6 +68,7 @@ def mutation(types: List[MutationTypesEnum], chain_generation_params,
                 is_correct_chain = constraint_function(new_chain)
                 if is_correct_chain:
                     new_individual = Individual(new_chain)
+                    new_individual.parent_operators = ind.parent_operators
                     new_individual.parent_operators.append(ParentOperator(operator_type='mutation',
                                                                           operator_name=str(mutation_type),
                                                                           parent_chains=[ChainTemplate(ind.chain)]))

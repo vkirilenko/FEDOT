@@ -62,9 +62,10 @@ class AtomizedModelTemplate(OperationTemplateAbstract):
         return absolute_path, relative_path
 
     def export_operation(self, path: str):
-        absolute_path = os.path.join(path, self.atomized_model_json_path)
-        _check_existing_path(absolute_path)
-        self.chain_template.export_chain(absolute_path)
+        if path:
+            absolute_path = os.path.join(path, self.atomized_model_json_path)
+            _check_existing_path(absolute_path)
+            self.chain_template.export_chain(absolute_path)
 
     def import_json(self, operation_object: dict):
         required_fields = ['operation_id', 'operation_type', 'nodes_from', 'atomized_model_json_path']

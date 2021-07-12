@@ -85,7 +85,7 @@ class ChainTemplate:
         json_data = json.dumps(chain_template_dict)
 
         if path is None:
-            return json_data
+            return json_data, self._create_fitted_operations()
 
         path = self._prepare_paths(path)
         absolute_path = os.path.abspath(path)
@@ -98,9 +98,9 @@ class ChainTemplate:
             resulted_path = os.path.join(absolute_path, f'{self.unique_chain_id}.json')
             self.log.message(f"The chain saved in the path: {resulted_path}.")
 
-        self._create_fitted_operations(absolute_path)
+        dict_fitted_operations = self._create_fitted_operations(absolute_path)
 
-        return json_data
+        return json_data, dict_fitted_operations
 
     def convert_to_dict(self, root_node: Node = None) -> dict:
         json_nodes = list(map(lambda op_template: op_template.convert_to_dict(), self.operation_templates))
@@ -114,9 +114,15 @@ class ChainTemplate:
 
         return json_object
 
-    def _create_fitted_operations(self, path):
-        for operation in self.operation_templates:
-            operation.export_operation(path)
+    def _create_fitted_operations(self, path=None):
+        if path:
+            for operation in self.operation_templates:
+                operation.export_operation(path)
+        else:
+            dict_fitted_operations = {}
+            for operation in self.operation_templates:
+                dict_fitted_operations[operation.fitted_operation_path] = operation.export_operation()
+            return dict_fitted_operations
 
     def _prepare_paths(self, path: str):
         absolute_path = os.path.abspath(path)
@@ -230,9 +236,7 @@ class ChainTemplate:
 
             fitted_operation = joblib.load(path_to_operation)
         elif dict_fitted_operations is not None:
-            bytes_container = BytesIO()
-            bytes_container.write(dict_fitted_operations[operation_object.fitted_operation_path])
-            fitted_operation = joblib.load(bytes_container)
+            fitted_operation = joblib.load(dict_fitted_operations[operation_object.fitted_operation_path])
 
         operation_object.fitted_operation = fitted_operation
         node.fitted_operation = fitted_operation

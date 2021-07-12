@@ -298,8 +298,8 @@ class Chain:
         """
         if not self.template:
             self.template = ChainTemplate(self, self.log)
-        json_object = self.template.export_chain(path, root_node=self.root_node)
-        return json_object
+        json_object, dict_fitted_operations = self.template.export_chain(path, root_node=self.root_node)
+        return json_object, dict_fitted_operations
 
     def load(self, source: Union[str, dict], dict_fitted_operations: dict = None):
         """

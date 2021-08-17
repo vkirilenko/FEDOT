@@ -1,4 +1,5 @@
 import random
+from functools import partial
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -7,12 +8,13 @@ from deap import tools
 
 from fedot.api.api_utils import (array_to_input_data, compose_fedot_model, composer_metrics_mapping,
                                  filter_operations_by_preset, save_predict)
-from fedot.core.chains.chain import Chain
-from fedot.core.chains.node import PrimaryNode
-from fedot.core.composer.optimisers.utils.pareto import ParetoFront
 from fedot.core.data.data import InputData
+from fedot.core.data.multi_modal import MultiModalData
 from fedot.core.data.visualisation import plot_forecast
 from fedot.core.log import default_log
+from fedot.core.optimisers.utils.pareto import ParetoFront
+from fedot.core.pipelines.node import PrimaryNode, SecondaryNode
+from fedot.core.pipelines.pipeline import Pipeline
 from fedot.core.repository.dataset_types import DataTypesEnum
 from fedot.core.repository.quality_metrics_repository import MetricsRepository
 from fedot.core.repository.tasks import Task, TaskParams, TaskTypesEnum, TsForecastingParams
@@ -20,14 +22,17 @@ from fedot.core.repository.tasks import Task, TaskParams, TaskTypesEnum, TsForec
 NOT_FITTED_ERR_MSG = 'Model not fitted yet'
 
 
-def default_evo_params():
+def default_evo_params(problem):
     """ Dictionary with default parameters for composer """
-    params = {'max_depth': 2,
-              'max_arity': 3,
+    params = {'max_depth': 3,
+              'max_arity': 4,
               'pop_size': 20,
               'num_of_generations': 20,
-              'learning_time': 2,
+              'timeout': 2,
               'preset': 'light_tun'}
+
+    if problem in ['classification', 'regression']:
+        params['cv_folds'] = 3
     return params
 
 
@@ -50,17 +55,18 @@ class Fedot:
         - ts_forecasting
         - clustering
     :param preset: name of preset for model building (e.g. 'light', 'ultra-light')
-    :param learning_time: time for model design (in minutes)
+    :param timeout: time for model design (in minutes)
     :param composer_params: parameters of pipeline optimisation
         The possible parameters are:
-            'max_depth' - max depth of the chain
-            'max_arity' - max arity of the chain
+            'max_depth' - max depth of the pipeline
+            'max_arity' - max arity of the pipeline nodes
             'pop_size' - population size for composer
             'num_of_generations' - number of generations for composer
-            'learning_time':- composing time (minutes)
+            'timeout':- composing time (minutes)
             'available_operations' - list of model names to use
             'with_tuning' - allow huperparameters tuning for the model
             'cv_folds' - number of folds for cross-validation
+            'validation_blocks' - number of validation blocks for time series forecasting
     :param task_params:  additional parameters of the task
     :param seed: value for fixed random seed
     :param verbose_level: level of the output detailing
@@ -71,7 +77,7 @@ class Fedot:
     def __init__(self,
                  problem: str,
                  preset: str = None,
-                 learning_time: Optional[float] = None,
+                 timeout: Optional[float] = None,
                  composer_params: dict = None,
                  task_params: TaskParams = None,
                  seed=None, verbose_level: int = 1):
@@ -85,7 +91,7 @@ class Fedot:
         self.task_params = task_params
 
         # model to use
-        self.current_model = None
+        self.current_pipeline = None
 
         # best models for multi-objective case
         self.best_models = None
@@ -103,9 +109,9 @@ class Fedot:
         self.log = default_log('FEDOT logger', verbose_level=verbose_level)
 
         if self.composer_params is None:
-            self.composer_params = default_evo_params()
+            self.composer_params = default_evo_params(self.problem)
         else:
-            self.composer_params = {**default_evo_params(), **self.composer_params}
+            self.composer_params = {**default_evo_params(self.problem), **self.composer_params}
 
         self.metric_to_compose = None
         if 'metric' in self.composer_params:
@@ -113,8 +119,8 @@ class Fedot:
             del self.composer_params['metric']
             self.metric_to_compose = self.composer_params['composer_metric']
 
-        if learning_time is not None:
-            self.composer_params['learning_time'] = learning_time
+        if timeout is not None:
+            self.composer_params['timeout'] = timeout
             self.composer_params['num_of_generations'] = 10000  # num of generation is limited by time now
 
         if self.problem == 'ts_forecasting' and task_params is None:
@@ -142,6 +148,8 @@ class Fedot:
             available_operations = filter_operations_by_preset(self.problem, preset)
             self.composer_params['available_operations'] = available_operations
             self.composer_params['with_tuning'] = '_tun' in preset or preset is None
+            if 'steady_state' in preset:
+                self.composer_params['genetic_scheme'] = 'steady_state'
 
     def _get_params(self):
         param_dict = {'train_data': self.train_data,
@@ -153,15 +161,15 @@ class Fedot:
     def _obtain_model(self, is_composing_required: bool = True):
         execution_params = self._get_params()
         if is_composing_required:
-            self.current_model, self.best_models, self.history = compose_fedot_model(**execution_params)
+            self.current_pipeline, self.best_models, self.history = compose_fedot_model(**execution_params)
 
         if isinstance(self.best_models, tools.ParetoFront):
             self.best_models.__class__ = ParetoFront
             self.best_models.objective_names = self.metric_to_compose
 
-        self.current_model.fit_from_scratch(self.train_data)
+        self.current_pipeline.fit_from_scratch(self.train_data)
 
-        return self.current_model
+        return self.current_pipeline
 
     def clean(self):
         """
@@ -169,19 +177,19 @@ class Fedot:
         """
         self.prediction = None
         self.prediction_labels = None
-        self.current_model = None
+        self.current_pipeline = None
 
     def fit(self,
-            features: Union[str, np.ndarray, pd.DataFrame, InputData],
+            features: Union[str, np.ndarray, pd.DataFrame, InputData, dict],
             target: Union[str, np.ndarray, pd.Series] = 'target',
-            predefined_model: Union[str, Chain] = None):
+            predefined_model: Union[str, Pipeline] = None):
         """
-        Fit the chain with a predefined structure or compose and fit the new chain
+        Fit the graph with a predefined structure or compose and fit the new graph
 
         :param features: the array with features of train data
         :param target: the array with target values of train data
-        :param predefined_model: the name of the atomic model or Chain instance
-        :return: Chain object
+        :param predefined_model: the name of the atomic model or Pipeline instance
+        :return: Pipeline object
         """
 
         self.target_name = target
@@ -191,22 +199,25 @@ class Fedot:
                                        is_predict=False)
 
         is_composing_required = True
-        if self.current_model is not None:
+        if self.current_pipeline is not None:
             is_composing_required = False
 
         if predefined_model is not None:
             is_composing_required = False
-            if isinstance(predefined_model, Chain):
-                self.current_model = predefined_model
+            if isinstance(predefined_model, Pipeline):
+                self.current_pipeline = predefined_model
             elif isinstance(predefined_model, str):
-                self.current_model = Chain(PrimaryNode(predefined_model))
+                categorical_preprocessing = PrimaryNode('one_hot_encoding')
+                scaling_preprocessing = SecondaryNode('scaling', nodes_from=[categorical_preprocessing])
+                model = SecondaryNode(predefined_model, nodes_from=[scaling_preprocessing])
+                self.current_pipeline = Pipeline(model)
             else:
                 raise ValueError(f'{type(predefined_model)} is not supported as Fedot model')
 
         return self._obtain_model(is_composing_required)
 
     def predict(self,
-                features: Union[str, np.ndarray, pd.DataFrame, InputData],
+                features: Union[str, np.ndarray, pd.DataFrame, InputData, dict],
                 save_predictions: bool = False):
         """
         Predict new target using already fitted model
@@ -215,24 +226,24 @@ class Fedot:
         :param save_predictions: if True-save predictions as csv-file in working directory.
         :return: the array with prediction values
         """
-        if self.current_model is None:
+        if self.current_pipeline is None:
             raise ValueError(NOT_FITTED_ERR_MSG)
 
         self.test_data = _define_data(ml_task=self.problem, target=self.target_name,
                                       features=features, is_predict=True)
 
         if self.problem.task_type == TaskTypesEnum.classification:
-            self.prediction_labels = self.current_model.predict(self.test_data, output_mode='labels')
-            self.prediction = self.current_model.predict(self.test_data, output_mode='probs')
+            self.prediction_labels = self.current_pipeline.predict(self.test_data, output_mode='labels')
+            self.prediction = self.current_pipeline.predict(self.test_data, output_mode='probs')
             output_prediction = self.prediction
         elif self.problem.task_type == TaskTypesEnum.ts_forecasting:
             # Convert forecast into one-dimensional array
-            self.prediction = self.current_model.predict(self.test_data)
+            self.prediction = self.current_pipeline.predict(self.test_data)
             forecast = np.ravel(np.array(self.prediction.predict))
             self.prediction.predict = forecast
             output_prediction = self.prediction
         else:
-            self.prediction = self.current_model.predict(self.test_data)
+            self.prediction = self.current_pipeline.predict(self.test_data)
             output_prediction = self.prediction
 
         if save_predictions:
@@ -240,7 +251,7 @@ class Fedot:
         return output_prediction.predict
 
     def predict_proba(self,
-                      features: Union[str, np.ndarray, pd.DataFrame, InputData],
+                      features: Union[str, np.ndarray, pd.DataFrame, InputData, dict],
                       save_predictions: bool = False,
                       probs_for_all_classes: bool = False):
         """
@@ -252,7 +263,7 @@ class Fedot:
         :return: the array with prediction values
         """
 
-        if self.current_model is None:
+        if self.current_pipeline is None:
             raise ValueError(NOT_FITTED_ERR_MSG)
 
         if self.problem.task_type == TaskTypesEnum.classification:
@@ -261,8 +272,8 @@ class Fedot:
 
             mode = 'full_probs' if probs_for_all_classes else 'probs'
 
-            self.prediction = self.current_model.predict(self.test_data, output_mode=mode)
-            self.prediction_labels = self.current_model.predict(self.test_data, output_mode='labels')
+            self.prediction = self.current_pipeline.predict(self.test_data, output_mode=mode)
+            self.prediction_labels = self.current_pipeline.predict(self.test_data, output_mode='labels')
 
             if save_predictions:
                 save_predict(self.prediction)
@@ -272,7 +283,7 @@ class Fedot:
         return self.prediction.predict
 
     def forecast(self,
-                 pre_history: Union[str, Tuple[np.ndarray, np.ndarray], InputData],
+                 pre_history: Union[str, Tuple[np.ndarray, np.ndarray], InputData, dict],
                  forecast_length: int = 1,
                  save_predictions: bool = False):
         """
@@ -284,7 +295,9 @@ class Fedot:
         :return: the array with prediction values
         """
 
-        if self.current_model is None:
+        # TODO use forecast length
+
+        if self.current_pipeline is None:
             raise ValueError(NOT_FITTED_ERR_MSG)
 
         if self.problem.task_type != TaskTypesEnum.ts_forecasting:
@@ -297,9 +310,11 @@ class Fedot:
                                       features=pre_history,
                                       is_predict=True)
 
-        self.current_model = Chain(self.current_model.root_node)
-
-        self.prediction = self.current_model.predict(self.test_data)
+        self.current_pipeline = Pipeline(self.current_pipeline.root_node)
+        # TODO add incremental forecast
+        self.prediction = self.current_pipeline.predict(self.test_data)
+        if len(self.prediction.predict.shape) > 1:
+            self.prediction.predict = np.squeeze(self.prediction.predict)
 
         if save_predictions:
             save_predict(self.prediction)
@@ -307,15 +322,15 @@ class Fedot:
 
     def load(self, path):
         """
-        Load saved chain from disk
+        Load saved graph from disk
 
         :param path to json file with model
         """
-        self.current_model.load(path)
+        self.current_pipeline.load(path)
 
     def plot_prediction(self):
         """
-        Plot the prediction obtained from chain
+        Plot the prediction obtained from graph
         """
         if self.prediction is not None:
             if self.problem.task_type == TaskTypesEnum.ts_forecasting:
@@ -331,7 +346,7 @@ class Fedot:
                     target: Union[np.ndarray, pd.Series] = None,
                     metric_names: Union[str, List[str]] = None) -> dict:
         """
-        Get quality metrics for the fitted chain
+        Get quality metrics for the fitted graph
 
         :param target: the array with target values of test data
         :param metric_names: the names of required metrics
@@ -377,7 +392,7 @@ class Fedot:
 
 
 def _define_data(ml_task: Task,
-                 features: Union[str, np.ndarray, pd.DataFrame, InputData],
+                 features: Union[str, np.ndarray, pd.DataFrame, InputData, dict],
                  target: Union[str, np.ndarray, pd.Series] = None,
                  is_predict=False):
     if type(features) == InputData:
@@ -391,7 +406,7 @@ def _define_data(ml_task: Task,
 
         if isinstance(target, str) and target in features.columns:
             target_array = features[target]
-            del features[target]
+            features = features.drop(columns=[target], axis=1)
         else:
             target_array = target
 
@@ -405,7 +420,7 @@ def _define_data(ml_task: Task,
 
         if isinstance(target, str):
             target_array = features[target]
-            del features[target]
+            features = features.drop(columns=[target], axis=1)
         else:
             target_array = target
 
@@ -434,8 +449,19 @@ def _define_data(ml_task: Task,
             if target is None:
                 target = 'target'
             data = InputData.from_csv(features, task=ml_task,
-                                      target_column=target,
+                                      target_columns=target,
                                       data_type=data_type)
+    elif type(features) == dict:
+        if target is None:
+            target = np.array([])
+        target_array = target
+
+        data_part_transformation_func = partial(array_to_input_data, target_array=target_array, task=ml_task)
+
+        # create labels for data sources
+        sources = dict((f'data_source_ts/{data_part_key}', data_part_transformation_func(features_array=data_part))
+                       for (data_part_key, data_part) in features.items())
+        data = MultiModalData(sources)
     else:
         raise ValueError('Please specify a features as path to csv file or as Numpy array')
 

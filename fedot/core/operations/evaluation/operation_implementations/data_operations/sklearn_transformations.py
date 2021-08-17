@@ -5,6 +5,8 @@ from sklearn.decomposition import KernelPCA, PCA
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, PolynomialFeatures, StandardScaler
 
+from fedot.core.data.data import InputData
+from fedot.core.data.data import data_has_categorical_features, divide_data_categorical_numerical, str_columns_check
 from fedot.core.operations.evaluation.operation_implementations. \
     implementation_interfaces import DataOperationImplementation, EncodedInvariantImplementation
 
@@ -36,12 +38,12 @@ class ComponentAnalysisImplementation(DataOperationImplementation):
 
         return self.pca
 
-    def transform(self, input_data, is_fit_chain_stage: Optional[bool]):
+    def transform(self, input_data, is_fit_pipeline_stage: Optional[bool]):
         """
         Method for transformation tabular data using PCA
 
         :param input_data: data with features, target and ids for PCA applying
-        :param is_fit_chain_stage: is this fit or predict stage for chain
+        :param is_fit_pipeline_stage: is this fit or predict stage for pipeline
         :return input_data: data with transformed features attribute
         """
 
@@ -110,15 +112,18 @@ class OneHotEncodingImplementation(DataOperationImplementation):
 
     def __init__(self, **params: Optional[dict]):
         super().__init__()
+        default_params = {
+            'drop': 'if_binary'
+        }
         if not params:
             # Default parameters
-            self.encoder = OneHotEncoder()
+            self.encoder = OneHotEncoder(**default_params)
         else:
-            self.encoder = OneHotEncoder(**params)
+            self.encoder = OneHotEncoder(**{**params, **default_params})
         self.categorical_ids = None
         self.non_categorical_ids = None
 
-    def fit(self, input_data):
+    def fit(self, input_data: InputData):
         """ Method for fit encoder with automatic determination of categorical
         features
 
@@ -126,7 +131,7 @@ class OneHotEncodingImplementation(DataOperationImplementation):
         :return encoder: trained encoder (optional output)
         """
         features = input_data.features
-        categorical_ids, non_categorical_ids = self.str_columns_check(features)
+        categorical_ids, non_categorical_ids = str_columns_check(features)
 
         # Indices of columns with categorical and non-categorical features
         self.categorical_ids = categorical_ids
@@ -138,15 +143,13 @@ class OneHotEncodingImplementation(DataOperationImplementation):
             categorical_features = np.array(features[:, categorical_ids])
             self.encoder.fit(categorical_features)
 
-        return self.encoder
-
-    def transform(self, input_data, is_fit_chain_stage: Optional[bool]):
+    def transform(self, input_data, is_fit_pipeline_stage: Optional[bool]):
         """
         The method that transforms the categorical features in the original
         dataset, but does not affect the rest features
 
         :param input_data: data with features, target and ids for transformation
-        :param is_fit_chain_stage: is this fit or predict stage for chain
+        :param is_fit_pipeline_stage: is this fit or predict stage for pipeline
         :return output_data: output data with transformed features table
         """
 
@@ -187,30 +190,6 @@ class OneHotEncodingImplementation(DataOperationImplementation):
 
     def get_params(self):
         return self.encoder.get_params()
-
-    @staticmethod
-    def str_columns_check(features):
-        """
-        Method for checking which columns contain categorical (text) data
-
-        :param features: tabular data for check
-        :return categorical_ids: indices of categorical columns in table
-        :return non_categorical_ids: indices of non categorical columns in table
-        """
-        source_shape = features.shape
-        columns_amount = source_shape[1] if len(source_shape) > 1 else 1
-
-        categorical_ids = []
-        non_categorical_ids = []
-        # For every column in table make check for first element
-        for column_id in range(0, columns_amount):
-            column = features[:, column_id] if columns_amount > 1 else features
-            if type(column[0]) == str:
-                categorical_ids.append(column_id)
-            else:
-                non_categorical_ids.append(column_id)
-
-        return categorical_ids, non_categorical_ids
 
 
 class PolyFeaturesImplementation(EncodedInvariantImplementation):
@@ -288,14 +267,19 @@ class ImputationImplementation(DataOperationImplementation):
 
     def __init__(self, **params: Optional[dict]):
         super().__init__()
+        default_params_categorical = {'strategy': 'most_frequent'}
+        self.params_cat = {**params, **default_params_categorical}
+        self.params_num = params
+
         if not params:
             # Default parameters
-            self.imputer = SimpleImputer()
+            self.imputer_cat = SimpleImputer(**default_params_categorical)
+            self.imputer_num = SimpleImputer()
         else:
-            self.imputer = SimpleImputer(**params)
-        self.params = params
+            self.imputer_cat = SimpleImputer(**self.params_cat)
+            self.imputer_num = SimpleImputer(**self.params_num)
 
-    def fit(self, input_data):
+    def fit(self, input_data: InputData):
         """
         The method trains SimpleImputer
 
@@ -303,23 +287,74 @@ class ImputationImplementation(DataOperationImplementation):
         :return imputer: trained SimpleImputer model
         """
 
-        self.imputer.fit(input_data.features)
-        return self.imputer
+        features_with_replaced_inf = np.where(np.isin(input_data.features,
+                                                      [np.inf, -np.inf]),
+                                              np.nan,
+                                              input_data.features)
+        input_data.features = features_with_replaced_inf
 
-    def transform(self, input_data, is_fit_chain_stage: Optional[bool] = None):
+        if data_has_categorical_features(input_data):
+            numerical, categorical = divide_data_categorical_numerical(input_data)
+            if len(categorical.features.shape) == 1:
+                self.imputer_cat.fit(categorical.features.reshape(-1, 1))
+            else:
+                self.imputer_cat.fit(categorical.features)
+            if len(numerical.features.shape) == 1:
+                self.imputer_num.fit(numerical.features.reshape(-1, 1))
+            else:
+                self.imputer_num.fit(numerical.features)
+        else:
+            if len(input_data.features.shape) == 1:
+                self.imputer_num.fit(input_data.features.reshape(-1, 1))
+            else:
+                self.imputer_num.fit(input_data.features)
+
+    def transform(self, input_data, is_fit_pipeline_stage: Optional[bool] = None):
         """
         Method for transformation tabular data using SimpleImputer
 
         :param input_data: data with features
-        :param is_fit_chain_stage: is this fit or predict stage for chain
+        :param is_fit_pipeline_stage: is this fit or predict stage for pipeline
         :return input_data: data with transformed features attribute
         """
-        transformed_features = self.imputer.transform(input_data.features)
+        features_with_replaced_inf = np.where(np.isin(input_data.features,
+                                                      [np.inf, -np.inf]),
+                                              np.nan,
+                                              input_data.features)
+        input_data.features = features_with_replaced_inf
 
-        # Update features
-        output_data = self._convert_to_output(input_data,
-                                              transformed_features)
+        if data_has_categorical_features(input_data):
+            numerical, categorical = divide_data_categorical_numerical(input_data)
+            if len(categorical.features.shape) == 1:
+                categorical_features = self.imputer_cat.transform(categorical.features.reshape(-1, 1))
+            else:
+                categorical_features = self.imputer_cat.transform(categorical.features)
+            if len(numerical.features.shape) == 1:
+                numerical_features = self.imputer_num.transform(numerical.features.reshape(-1, 1))
+            else:
+                numerical_features = self.imputer_num.transform(numerical.features)
+            transformed_features = np.hstack((categorical_features, numerical_features))
+        else:
+            if len(input_data.features.shape) == 1:
+                transformed_features = self.imputer_num.transform(input_data.features.reshape(-1, 1))
+            else:
+                transformed_features = self.imputer_num.transform(input_data.features)
+
+        output_data = self._convert_to_output(input_data, transformed_features, data_type=input_data.data_type)
         return output_data
 
-    def get_params(self):
-        return self.imputer.get_params()
+    def fit_transform(self, input_data, is_fit_pipeline_stage: Optional[bool] = None):
+        """
+        Method for training and transformation tabular data using SimpleImputer
+
+        :param input_data: data with features
+        :param is_fit_pipeline_stage: is this fit or predict stage for pipeline
+        :return input_data: data with transformed features attribute
+        """
+        self.fit(input_data)
+        output_data = self.transform(input_data)
+        return output_data
+
+    def get_params(self) -> dict:
+        dictionary = {'imputer_categorical': self.params_cat, 'imputer_numerical': self.params_num}
+        return dictionary

@@ -22,7 +22,7 @@ copyright = '2020-2021, NSS Lab'
 author = 'NSS Lab'
 
 # The full version, including alpha/beta/rc tags
-release = '0.3.1'
+release = '0.4.0'
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -36,7 +36,6 @@ extensions = [
 ]
 autodoc_typehints = 'description'
 
-
 autodoc_mock_imports = ['objgraph', 'memory_profiler', 'gprof2dot', 'snakeviz']
 
 autodoc_member_order = 'bysource'
@@ -48,7 +47,6 @@ templates_path = ['_templates']
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
-
 
 # -- Options for HTML output -------------------------------------------------
 

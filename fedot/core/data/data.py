@@ -1,6 +1,5 @@
 import glob
 import os
-import warnings
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
@@ -11,9 +10,13 @@ from PIL import Image
 
 from fedot.core.data.load_data import JSONBatchLoader, TextBatchLoader
 from fedot.core.data.merge import DataMerger
+from fedot.core.data.supplementary_data import SupplementaryData
 from fedot.core.repository.dataset_types import DataTypesEnum
 from fedot.core.repository.tasks import Task, TaskTypesEnum
-from fedot.core.data.supplementary_data import SupplementaryData
+from fedot.core.data.multi_modal import MultiModalData
+
+# Max unique values to convert numerical column to categorical.
+MAX_UNIQ_VAL = 12
 
 
 @dataclass
@@ -34,39 +37,31 @@ class Data:
                  task: Task = Task(TaskTypesEnum.classification),
                  data_type: DataTypesEnum = DataTypesEnum.table,
                  columns_to_drop: Optional[List] = None,
-                 target_column: Optional[str] = ''):
+                 target_columns: Union[str, List] = ''):
         """
         :param file_path: the path to the CSV with data
         :param columns_to_drop: the names of columns that should be dropped
         :param delimiter: the delimiter to separate the columns
         :param task: the task that should be solved with data
         :param data_type: the type of data interpretation
-        :param target_column: name of target column (last column if empty and no target if None)
+        :param target_columns: name of target column (last column if empty and no target if None)
         :return:
         """
 
         data_frame = pd.read_csv(file_path, sep=delimiter)
         if columns_to_drop:
             data_frame = data_frame.drop(columns_to_drop, axis=1)
-        data_frame = _convert_dtypes(data_frame=data_frame)
+
+        # Get indices of the DataFrame
         data_array = np.array(data_frame).T
         idx = data_array[0]
 
-        if target_column == '':
-            target_column = data_frame.columns[-1]
-
-        if target_column and target_column in data_frame.columns:
-            target = np.array(data_frame[target_column]).astype(np.float)
-            pos = list(data_frame.keys()).index(target_column)
-            features = np.delete(data_array.T, [0, pos], axis=1)
+        if type(target_columns) is list:
+            features, target = process_multiple_columns(target_columns, data_frame)
         else:
-            # no target in data
-            features = data_array[1:].T
-            target = None
+            features, target = process_one_column(target_columns, data_frame,
+                                                  data_array)
 
-        target = np.array(target)
-        if len(target.shape) < 2:
-            target = target.reshape((-1, 1))
         return InputData(idx=idx, features=features, target=target, task=task, data_type=data_type)
 
     @staticmethod
@@ -89,7 +84,7 @@ class Data:
                                    task=task,
                                    data_type=DataTypesEnum.ts)
         else:
-            # Prepare InputData for train the chain
+            # Prepare InputData for train the pipeline
             input_data = InputData(idx=np.arange(0, len(time_series)),
                                    features=time_series,
                                    target=time_series,
@@ -259,17 +254,6 @@ class OutputData(Data):
     target: Optional[np.array] = None
 
 
-def _convert_dtypes(data_frame: pd.DataFrame):
-    """ Function converts columns with objects into numerical form and fill na """
-    objects: pd.DataFrame = data_frame.select_dtypes('object')
-    for column_name in objects:
-        warnings.warn(f'Automatic factorization for the column {column_name} with type "object" is applied.')
-        encoded = pd.factorize(data_frame[column_name])[0]
-        data_frame[column_name] = encoded
-    data_frame = data_frame.fillna(0)
-    return data_frame
-
-
 def _resize_image(file_path: str, target_size: tuple):
     im = Image.open(file_path)
     im_resized = im.resize(target_size, Image.NEAREST)
@@ -280,3 +264,163 @@ def _resize_image(file_path: str, target_size: tuple):
         # TODO refactor for multi-color
         img = img[..., 0] + img[..., 1] + img[..., 2]
     return img
+
+
+def process_one_column(target_column, data_frame, data_array):
+    """ Function process pandas dataframe with single column
+
+    :param target_column: name of column with target or None
+    :param data_frame: loaded panda DataFrame
+    :param data_array: array received from source DataFrame
+    :return features: numpy array (table) with features
+    :return target: numpy array (column) with target
+    """
+    if target_column == '':
+        # Take the last column in the table
+        target_column = data_frame.columns[-1]
+
+    if target_column and target_column in data_frame.columns:
+        target = np.array(data_frame[target_column])
+        pos = list(data_frame.keys()).index(target_column)
+        features = np.delete(data_array.T, [0, pos], axis=1)
+    else:
+        # no target in data
+        features = data_array[1:].T
+        target = None
+
+    target = np.array(target)
+    if len(target.shape) < 2:
+        target = target.reshape((-1, 1))
+
+    return features, target
+
+
+def process_multiple_columns(target_columns, data_frame):
+    """ Function for processing target """
+    features = np.array(data_frame.drop(columns=target_columns))
+
+    # Remove index column
+    targets = np.array(data_frame[target_columns])
+
+    return features, targets
+
+
+def data_has_categorical_features(data: Union[InputData, MultiModalData]) -> bool:
+    """ Check data for categorical columns. Also check, if some numerical column
+    has unique values less then MAX_UNIQ_VAL, then convert this column to string.
+
+    :param data: Union[InputData, MultiModalData]
+    :return data_has_categorical_columns: bool, whether data has categorical columns or not
+    """
+    data_has_categorical_columns = False
+
+    if isinstance(data, MultiModalData):
+        for data_source_name, values in data.items():
+            if data_source_name.startswith('data_source_table'):
+                data_has_categorical_columns = _integer_to_categorical(values)
+    elif _data_type_is_suitable_preprocessing(data):
+        data_has_categorical_columns = _integer_to_categorical(data)
+
+    return data_has_categorical_columns
+
+
+def data_has_missing_values(data: Union[InputData, MultiModalData]) -> bool:
+    """ Check data for missing values."""
+
+    if isinstance(data, MultiModalData):
+        for data_source_name, values in data.items():
+            if _data_type_is_table(values):
+                return pd.DataFrame(values.features).isna().sum().sum() > 0
+    elif _data_type_is_suitable_preprocessing(data):
+        return pd.DataFrame(data.features).isna().sum().sum() > 0
+    return False
+
+
+def str_columns_check(features):
+    """
+    Method for checking which columns contain categorical (text) data
+
+    :param features: tabular data for check
+    :return categorical_ids: indices of categorical columns in table
+    :return non_categorical_ids: indices of non categorical columns in table
+    """
+    source_shape = features.shape
+    columns_amount = source_shape[1] if len(source_shape) > 1 else 1
+
+    categorical_ids = []
+    non_categorical_ids = []
+    # For every column in table make check for first element
+    for column_id in range(0, columns_amount):
+        column = features[:, column_id] if columns_amount > 1 else features
+        if isinstance(column[0], str):
+            categorical_ids.append(column_id)
+        else:
+            non_categorical_ids.append(column_id)
+
+    return categorical_ids, non_categorical_ids
+
+
+def divide_data_categorical_numerical(input_data: InputData) -> (InputData, InputData):
+    categorical_ids, non_categorical_ids = str_columns_check(input_data.features)
+    numerical_features = input_data.features[:, non_categorical_ids]
+    categorical_features = input_data.features[:, categorical_ids]
+
+    numerical = InputData(features=numerical_features, data_type=input_data.data_type,
+                          target=input_data.target, task=input_data.task, idx=input_data.idx)
+    categorical = InputData(features=categorical_features, data_type=input_data.data_type,
+                            target=input_data.target, task=input_data.task, idx=input_data.idx)
+
+    return numerical, categorical
+
+
+def _data_type_is_table(data: InputData) -> bool:
+    return data.data_type == DataTypesEnum.table
+
+
+def _data_type_is_suitable_preprocessing(data: InputData) -> bool:
+    if data.data_type == DataTypesEnum.table or data.data_type == DataTypesEnum.ts:
+        return True
+    return False
+
+
+def _integer_to_categorical(data: InputData) -> bool:
+    """ If some numerical column has unique values less then
+    MAX_UNIQ_VAL, then convert this column to string.
+
+    :param data: InputData
+    :return data_has_categorical_columns: bool, whether data has categorical columns or not
+    """
+    data_has_categorical_columns = False
+
+    if isinstance(data.features, list) or len(data.features.shape) == 1:
+        col_value = data.features
+        transformed_features = _convert_categorical_int_to_str(col_value)
+        data.features = transformed_features
+
+        data_has_categorical_columns = _is_values_categorical(transformed_features)
+    else:
+        num_columns = data.features.shape[1]
+        for col_index in range(num_columns):
+            col_value = data.features[:, col_index]
+            transformed_features = _convert_categorical_int_to_str(col_value)
+            data.features[:, col_index] = transformed_features
+
+            if not data_has_categorical_columns:
+                data_has_categorical_columns = _is_values_categorical(transformed_features)
+
+    return data_has_categorical_columns
+
+
+def _is_values_categorical(values):
+    if isinstance(values[0], str):
+        return True
+    return False
+
+
+def _convert_categorical_int_to_str(values):
+    if isinstance(values[0], int):
+        uniq_val_in_col = len(np.unique(values))
+        if uniq_val_in_col <= MAX_UNIQ_VAL:
+            values = list(map(str, values))
+
+    return values

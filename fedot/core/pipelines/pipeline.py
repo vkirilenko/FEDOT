@@ -1,5 +1,4 @@
 from copy import copy
-
 from datetime import timedelta
 from multiprocessing import Manager, Process
 from typing import Callable, List, Optional, Union
@@ -14,7 +13,7 @@ from fedot.core.optimisers.utils.population_utils import input_data_characterist
 from fedot.core.pipelines.node import Node, PrimaryNode
 from fedot.core.pipelines.template import PipelineTemplate
 from fedot.core.pipelines.tuning.unified import PipelineTuner
-from fedot.core.repository.tasks import TaskTypesEnum
+from infrastructure.remote_fit import remote_pipeline_fit
 
 ERROR_PREFIX = 'Invalid pipeline configuration:'
 
@@ -31,6 +30,8 @@ class Pipeline(Graph):
         fitted_on_data stores the data which were used in last pipeline fitting (equals None if pipeline hasn't been
         fitted yet)
     """
+
+    fit_mode = 'local'
 
     def __init__(self, nodes: Optional[Union[Node, List[Node]]] = None,
                  log: Log = None):
@@ -134,8 +135,10 @@ class Pipeline(Graph):
         with Timer(log=self.log) as t:
             computation_time_update = not use_fitted_operations or not self.root_node.fitted_operation or \
                                       self.computation_time is None
-
-            train_predicted = self.root_node.fit(input_data=input_data)
+            if Pipeline.fit_mode == 'local':
+                train_predicted = self.root_node.fit(input_data=input_data)
+            else:
+                train_predicted = remote_pipeline_fit(self)
             if computation_time_update:
                 self.computation_time = round(t.minutes_from_start, 3)
 

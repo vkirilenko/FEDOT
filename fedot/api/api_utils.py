@@ -111,7 +111,9 @@ def filter_operations_by_preset(task: Task, preset: str):
     """ Function filter operations by preset, remove "heavy" operations and save
     appropriate ones
     """
-    excluded = ['mlp', 'catboost', 'lda', 'qda', 'lgbm', 'svc', 'svr', 'arima', 'exog_ts_data_source', 'text_clean']
+    excluded = ['mlp', 'catboost', 'lda', 'qda', 'lgbm',
+                'svc', 'svr', 'arima', 'exog_ts_data_source', 'text_clean',
+                'one_hot_encoding']
     excluded_models_dict = {'light': excluded,
                             'light_tun': excluded,
                             'light_steady_state': excluded}

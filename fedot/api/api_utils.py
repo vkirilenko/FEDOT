@@ -113,7 +113,7 @@ def filter_operations_by_preset(task: Task, preset: str):
     """
     excluded = ['mlp', 'catboost', 'lda', 'qda', 'lgbm',
                 'svc', 'svr', 'arima', 'exog_ts_data_source', 'text_clean',
-                'one_hot_encoding']
+                'one_hot_encoding', 'ransac_lin_reg', 'ransac_non_lin_reg']
     excluded_models_dict = {'light': excluded,
                             'light_tun': excluded,
                             'light_steady_state': excluded}

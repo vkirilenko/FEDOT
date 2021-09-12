@@ -2,6 +2,7 @@ from abc import abstractmethod
 from copy import deepcopy
 from typing import Any, Type
 
+from fedot.core.dag.graph_node import GraphNode
 from fedot.core.optimisers.graph import OptGraph, OptNode
 from fedot.core.pipelines.node import Node, PrimaryNode, SecondaryNode
 from fedot.core.pipelines.pipeline import Pipeline
@@ -66,7 +67,7 @@ class PipelineAdapter(BaseOptimizationAdapter):
 
     def _transform_to_opt_node(self, node, *args, **kwargs):
         # Prepare content for nodes
-        if not isinstance(node, OptNode):
+        if not isinstance(node, OptNode) and not isinstance(node, GraphNode):
             node.content = {'name': node.operation,
                             'params': node.custom_params}
             _transform_node(node=node, primary_class=OptNode,
